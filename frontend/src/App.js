@@ -486,6 +486,9 @@ function App() {
       setCurrentView("rooms");
       fetchRooms();
       
+      // Clear the saved room ID
+      localStorage.removeItem("wordleRoomId");
+      
     } catch (error) {
       console.error("Error leaving room:", error);
     }
