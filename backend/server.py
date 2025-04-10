@@ -219,6 +219,60 @@ async def update_score(score: Score = Body(...)):
                 {"id": score.roomId},
                 {"$push": {"scores": game_result}}
             )
+            
+            # Update the player state in the game
+            await db.rooms.update_one(
+                {"id": score.roomId, "gameState.active": True},
+                {"$set": {
+                    f"gameState.playerStates.{score.username}.completed": True,
+                    f"gameState.playerStates.{score.username}.won": score.won,
+                    f"gameState.playerStates.{score.username}.attempts": score.attempts
+                }}
+            )
+            
+            # Check if all players have completed the game
+            room = await db.rooms.find_one({"id": score.roomId})
+            if room and room.get("gameState", {}).get("active", False):
+                all_completed = True
+                player_states = room["gameState"]["playerStates"]
+                for player, state in player_states.items():
+                    if not state.get("completed", False):
+                        all_completed = False
+                        break
+                
+                if all_completed:
+                    # End the game
+                    await db.rooms.update_one(
+                        {"id": score.roomId},
+                        {"$set": {
+                            "gameState.active": False,
+                            "gameState.endedAt": datetime.now()
+                        }}
+                    )
+                    
+                    # Determine winner
+                    winner = None
+                    best_score = 999
+                    for player, state in player_states.items():
+                        if state.get("won", False) and state.get("attempts", 999) < best_score:
+                            best_score = state["attempts"]
+                            winner = player
+                    
+                    if winner:
+                        # Notify the room about the winner
+                        win_message = {
+                            "type": "system",
+                            "content": f"Game over! {winner} won with {best_score} attempts!",
+                            "sender": "system",
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        await manager.broadcast(json.dumps(win_message), score.roomId)
+                        
+                        # Store the win message
+                        await db.rooms.update_one(
+                            {"id": score.roomId},
+                            {"$push": {"messages": win_message}}
+                        )
         
         if result.modified_count == 0:
             logger.warning(f"User not found for score update: {score.username}")
