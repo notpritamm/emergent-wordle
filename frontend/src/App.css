@@ -612,16 +612,49 @@ header {
   gap: 1rem;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s;
+  position: relative;
+  overflow: hidden;
 }
 
 .room-card:hover {
   transform: translateY(-5px);
 }
 
+.room-card.test-room {
+  border: 2px solid #ff9800;
+}
+
+.room-card.game-active {
+  border: 2px solid var(--color-accent);
+}
+
 .room-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+}
+
+.room-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: flex-end;
+}
+
+.room-test-badge {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  background-color: #ff9800;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.room-game-badge {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  background-color: var(--color-accent);
+  border-radius: 4px;
+  font-weight: bold;
 }
 
 .room-privacy {
