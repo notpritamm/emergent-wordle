@@ -102,6 +102,29 @@ class RoomUpdateMembers(BaseModel):
     roomId: str
     username: str
     action: str  # "add" or "remove"
+    
+class RoomStartGame(BaseModel):
+    roomId: str
+    autoSelectWordCount: Optional[int] = 0
+    ownerPlaying: bool = True
+
+class GameState(BaseModel):
+    roomId: str
+    active: bool = False
+    currentWord: Optional[str] = None
+    startedAt: Optional[datetime] = None
+    endedAt: Optional[datetime] = None
+    playerStates: Dict[str, Dict] = {}
+    autoSelectWordCount: int = 0
+    ownerPlaying: bool = True
+    
+class GameUpdate(BaseModel):
+    roomId: str
+    username: str
+    boardData: List[List[Dict]] = []
+    currentAttempt: int = 0
+    gameOver: bool = False
+    won: bool = False
 
 class Room(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
