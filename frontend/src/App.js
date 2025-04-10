@@ -1013,6 +1013,7 @@ function App() {
     if (!currentRoom) return null;
     
     const isHost = currentRoom.host === username;
+    const gameActive = currentRoom.gameState && currentRoom.gameState.active;
     
     return (
       <div className="room-container">
@@ -1026,6 +1027,11 @@ function App() {
             <span className="room-host">
               Host: {currentRoom.host}
             </span>
+            {gameActive && (
+              <span className="game-status active">
+                Game in progress! 🎮
+              </span>
+            )}
           </div>
         </div>
         
@@ -1053,10 +1059,62 @@ function App() {
               ))}
             </div>
             
+            {isHost && !gameActive && (
+              <div className="game-settings">
+                <div className="section-header">
+                  <h3>Game Settings</h3>
+                </div>
+                <div className="settings-form">
+                  <div className="form-group checkbox">
+                    <input
+                      type="checkbox"
+                      id="ownerPlaying"
+                      checked={gameStartOptions.ownerPlaying}
+                      onChange={(e) => setGameStartOptions({
+                        ...gameStartOptions,
+                        ownerPlaying: e.target.checked
+                      })}
+                    />
+                    <label htmlFor="ownerPlaying">I want to play too</label>
+                  </div>
+                  <div className="form-group">
+                    <label>Auto-select words:</label>
+                    <select
+                      value={gameStartOptions.autoSelectWordCount}
+                      onChange={(e) => setGameStartOptions({
+                        ...gameStartOptions,
+                        autoSelectWordCount: parseInt(e.target.value) || 0
+                      })}
+                    >
+                      <option value="0">No auto-selection</option>
+                      <option value="1">Auto-select 1 word</option>
+                      <option value="3">Auto-select 3 words</option>
+                      <option value="5">Auto-select 5 words</option>
+                      <option value="10">Auto-select 10 words</option>
+                    </select>
+                    <p className="setting-help">
+                      Auto-selection lets the game randomly pick words from your word list
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div className="room-actions">
-              <button className="primary-button" onClick={startGame}>
-                Play Game
-              </button>
+              {isHost && !gameActive && (
+                <button 
+                  className="primary-button" 
+                  onClick={startGame}
+                  disabled={!currentRoom.words || currentRoom.words.length === 0}
+                >
+                  Start Game
+                </button>
+              )}
+              {!isHost && gameActive && currentRoom.gameState?.playerStates?.[username] && !currentRoom.gameState.playerStates[username].completed && (
+                <button className="primary-button" onClick={() => setCurrentView("game")}>
+                  Join Game
+                </button>
+              )}
               <button className="secondary-button" onClick={leaveRoom}>
                 Leave Room
               </button>
@@ -1099,7 +1157,7 @@ function App() {
               </div>
             </div>
             
-            {isHost && (
+            {isHost && !gameActive && (
               <div className="word-management">
                 <div className="section-header">
                   <h3>Word Management</h3>
