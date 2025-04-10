@@ -1413,6 +1413,7 @@ function App() {
         </div>
         <h1 className="title">WORDLE ROOMS</h1>
         <div className="header-right">
+          <span className="user-display">{username}</span>
           <button className="menu-button" onClick={handleLogout}>
             Logout
           </button>
