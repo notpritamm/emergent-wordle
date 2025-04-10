@@ -1,202 +1,121 @@
-import requests
 import unittest
+import requests
+import json
 from datetime import datetime
 
-class WordleRoomsAPITester:
-    def __init__(self, base_url):
-        self.base_url = base_url
-        self.tests_run = 0
-        self.tests_passed = 0
-        self.current_room_id = None
-        self.username = f"test_user_{datetime.now().strftime('%H%M%S')}"
+BACKEND_URL = "https://wordle-backend-402418.ue.r.appspot.com/api"  # Using public endpoint
 
-    def run_test(self, name, method, endpoint, expected_status, data=None):
-        """Run a single API test"""
-        url = f"{self.base_url}/api/{endpoint}"
-        headers = {'Content-Type': 'application/json'}
+class WordleRoomTest(unittest.TestCase):
+    def setUp(self):
+        self.user1 = f"test_user1_{datetime.now().strftime('%H%M%S')}"
+        self.user2 = f"test_user2_{datetime.now().strftime('%H%M%S')}"
+        self.room_name = f"Test_Room_{datetime.now().strftime('%H%M%S')}"
+        self.test_word = "TESTING"
+
+    def test_full_game_flow(self):
+        print("\nTesting full game flow...")
         
-        self.tests_run += 1
-        print(f"\n🔍 Testing {name}...")
+        # 1. Login both users
+        print("1. Testing user login...")
+        user1_response = requests.post(f"{BACKEND_URL}/users/login", json={"username": self.user1})
+        user2_response = requests.post(f"{BACKEND_URL}/users/login", json={"username": self.user2})
         
-        try:
-            if method == 'GET':
-                response = requests.get(url, headers=headers)
-            elif method == 'POST':
-                response = requests.post(url, json=data, headers=headers)
-            elif method == 'DELETE':
-                response = requests.delete(url, json=data, headers=headers)
+        self.assertEqual(user1_response.status_code, 200)
+        self.assertEqual(user2_response.status_code, 200)
+        print("✓ Both users logged in successfully")
 
-            success = response.status_code == expected_status
-            if success:
-                self.tests_passed += 1
-                print(f"✅ Passed - Status: {response.status_code}")
-                return True, response.json() if response.text else {}
-            else:
-                print(f"❌ Failed - Expected {expected_status}, got {response.status_code}")
-                print(f"Response: {response.text}")
-                return False, {}
-
-        except Exception as e:
-            print(f"❌ Failed - Error: {str(e)}")
-            return False, {}
-
-    def test_login(self):
-        """Test user login"""
-        success, response = self.run_test(
-            "User Login",
-            "POST",
-            "users/login",
-            200,
-            {"username": self.username}
-        )
-        return success
-
-    def test_create_room(self):
-        """Test room creation"""
-        room_data = {
-            "room_data": {
-                "name": f"Test Room {datetime.now().strftime('%H%M%S')}",
-                "description": "Test room description",
-                "isPrivate": False,
-                "password": None
-            },
-            "user": {"username": self.username}
-        }
-        
-        success, response = self.run_test(
-            "Create Room",
-            "POST",
-            "rooms",
-            200,
-            room_data
+        # 2. Create room as User1
+        print("\n2. Testing room creation...")
+        create_room_response = requests.post(
+            f"{BACKEND_URL}/rooms",
+            json={
+                "room_data": {
+                    "name": self.room_name,
+                    "isPrivate": False,
+                    "description": "Test room for automated testing"
+                },
+                "user": {"username": self.user1}
+            }
         )
         
-        if success and response.get('roomId'):
-            self.current_room_id = response['roomId']
-            return True
-        return False
+        self.assertEqual(create_room_response.status_code, 200)
+        room_data = create_room_response.json()
+        room_id = room_data["roomId"]
+        print(f"✓ Room created with ID: {room_id}")
 
-    def test_join_room(self):
-        """Test joining a room"""
-        if not self.current_room_id:
-            print("❌ No room ID available for joining")
-            return False
-            
-        join_data = {
-            "join_data": {
-                "roomId": self.current_room_id,
-                "password": None
-            },
-            "user": {"username": self.username}
-        }
+        # 3. Add word to room
+        print("\n3. Testing adding word to room...")
+        add_word_response = requests.post(
+            f"{BACKEND_URL}/rooms/words",
+            json={
+                "add_data": {
+                    "roomId": room_id,
+                    "word": self.test_word
+                },
+                "user": {"username": self.user1}
+            }
+        )
         
-        success, _ = self.run_test(
-            "Join Room",
-            "POST",
-            "rooms/join",
-            200,
-            join_data
-        )
-        return success
+        self.assertEqual(add_word_response.status_code, 200)
+        print("✓ Word added successfully")
 
-    def test_add_word(self):
-        """Test adding a word to room"""
-        if not self.current_room_id:
-            print("❌ No room ID available for adding word")
-            return False
-            
-        word_data = {
-            "add_data": {
-                "roomId": self.current_room_id,
-                "word": "TESTING"
-            },
-            "user": {"username": self.username}
-        }
+        # 4. User2 joins room
+        print("\n4. Testing room joining...")
+        join_room_response = requests.post(
+            f"{BACKEND_URL}/rooms/join",
+            json={
+                "join_data": {"roomId": room_id},
+                "user": {"username": self.user2}
+            }
+        )
         
-        success, _ = self.run_test(
-            "Add Word",
-            "POST",
-            "rooms/words",
-            200,
-            word_data
+        self.assertEqual(join_room_response.status_code, 200)
+        print("✓ User2 joined room successfully")
+
+        # 5. Start game as User1
+        print("\n5. Testing game start...")
+        start_game_response = requests.post(
+            f"{BACKEND_URL}/rooms/start-game",
+            json={
+                "game_data": {
+                    "roomId": room_id,
+                    "autoSelectWordCount": 0,
+                    "ownerPlaying": True
+                },
+                "user": {"username": self.user1}
+            }
         )
-        return success
+        
+        self.assertEqual(start_game_response.status_code, 200)
+        game_data = start_game_response.json()
+        self.assertEqual(game_data["word"], self.test_word)
+        print("✓ Game started successfully")
 
-    def test_get_random_word(self):
-        """Test getting a random word from room"""
-        if not self.current_room_id:
-            print("❌ No room ID available for getting word")
-            return False
-            
-        success, response = self.run_test(
-            "Get Random Word",
-            "GET",
-            f"rooms/{self.current_room_id}/words",
-            200
-        )
-        return success and 'word' in response
+        # 6. Get game state for both users
+        print("\n6. Testing game state retrieval...")
+        user1_game_state = requests.get(f"{BACKEND_URL}/game/state/{room_id}?username={self.user1}")
+        user2_game_state = requests.get(f"{BACKEND_URL}/game/state/{room_id}?username={self.user2}")
+        
+        self.assertEqual(user1_game_state.status_code, 200)
+        self.assertEqual(user2_game_state.status_code, 200)
+        print("✓ Game state retrieved for both users")
 
-    def test_leave_room(self):
-        """Test leaving a room"""
-        if not self.current_room_id:
-            print("❌ No room ID available for leaving")
-            return False
-            
-        success, _ = self.run_test(
-            "Leave Room",
-            "POST",
-            f"rooms/{self.current_room_id}/leave",
-            200,
-            {"user": {"username": self.username}}
-        )
-        return success
+        # 7. Test room sorting
+        print("\n7. Testing room sorting...")
+        rooms_by_name = requests.get(f"{BACKEND_URL}/rooms?sort_by=name&sort_order=asc")
+        rooms_by_members = requests.get(f"{BACKEND_URL}/rooms?sort_by=memberCount&sort_order=desc")
+        
+        self.assertEqual(rooms_by_name.status_code, 200)
+        self.assertEqual(rooms_by_members.status_code, 200)
+        print("✓ Room sorting working")
 
-def main():
-    # Get backend URL from frontend .env file
-    try:
-        with open('/app/frontend/.env', 'r') as f:
-            for line in f:
-                if line.startswith('REACT_APP_BACKEND_URL='):
-                    backend_url = line.strip().split('=')[1].strip('"').strip("'")
-                    break
-    except Exception as e:
-        print(f"Error reading backend URL: {e}")
-        return 1
+        # 8. Test room cleanup
+        print("\n8. Testing room cleanup...")
+        cleanup_response = requests.post(f"{BACKEND_URL}/cleanup")
+        self.assertEqual(cleanup_response.status_code, 200)
+        print("✓ Room cleanup successful")
 
-    print(f"\n🚀 Starting Wordle Rooms API Tests using {backend_url}")
-    tester = WordleRoomsAPITester(backend_url)
+        print("\nAll backend tests completed successfully!")
 
-    # Run tests in sequence
-    if not tester.test_login():
-        print("❌ Login failed, stopping tests")
-        return 1
-
-    if not tester.test_create_room():
-        print("❌ Room creation failed, stopping tests")
-        return 1
-
-    if not tester.test_join_room():
-        print("❌ Room joining failed, stopping tests")
-        return 1
-
-    if not tester.test_add_word():
-        print("❌ Adding word failed, stopping tests")
-        return 1
-
-    if not tester.test_get_random_word():
-        print("❌ Getting random word failed, stopping tests")
-        return 1
-
-    if not tester.test_leave_room():
-        print("❌ Leaving room failed")
-
-    # Print results
-    print(f"\n📊 Tests Summary:")
-    print(f"Total tests run: {tester.tests_run}")
-    print(f"Tests passed: {tester.tests_passed}")
-    print(f"Success rate: {(tester.tests_passed/tester.tests_run)*100:.1f}%")
-    
-    return 0 if tester.tests_passed == tester.tests_run else 1
-
-if __name__ == "__main__":
-    exit(main())
+if __name__ == '__main__':
+    unittest.main(argv=[''], verbosity=2)
