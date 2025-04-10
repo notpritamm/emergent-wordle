@@ -375,9 +375,11 @@ function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          user: { username },
-          roomId: currentRoom.id,
-          word: newWordInput.trim()
+          add_data: {
+            roomId: currentRoom.id,
+            word: newWordInput.trim()
+          },
+          user: { username }
         }),
       });
       
