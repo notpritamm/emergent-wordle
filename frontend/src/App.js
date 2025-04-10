@@ -230,6 +230,25 @@ function App() {
         setCurrentView("rooms");
         loadUserStats(name);
         fetchRooms();
+        
+        // Check if there was a saved room to join
+        const savedRoomId = localStorage.getItem("wordleRoomId");
+        if (savedRoomId) {
+          try {
+            // Try to fetch the room details first to see if it exists
+            const roomResponse = await fetch(`${BACKEND_URL}/api/rooms/${savedRoomId}`);
+            if (roomResponse.ok) {
+              // Room exists, attempt to join it
+              await joinRoom(savedRoomId);
+            } else {
+              // Room doesn't exist anymore, clear the saved room
+              localStorage.removeItem("wordleRoomId");
+            }
+          } catch (roomError) {
+            console.error("Error rejoining room:", roomError);
+            localStorage.removeItem("wordleRoomId");
+          }
+        }
       } else {
         alert("Error logging in. Please try again.");
       }
