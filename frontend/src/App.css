@@ -118,13 +118,31 @@ header {
   background-color: #629b58;
 }
 
+/* Game layout */
+.game-layout {
+  display: flex;
+  width: 100%;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.game-board-container {
+  flex: 2;
+}
+
+.game-sidebar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
 /* Game board styles */
 .game-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   width: 100%;
-  max-width: 500px;
 }
 
 .game-header {
@@ -138,6 +156,72 @@ header {
   flex-direction: column;
   gap: 0.5rem;
   margin: 1rem 0;
+}
+
+/* Other players' boards */
+.other-players-boards {
+  background-color: var(--color-card-bg);
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.other-players-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.other-player-board {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.other-player-board h4 {
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--color-empty);
+  padding-bottom: 0.3rem;
+}
+
+.mini-board {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mini-row {
+  display: flex;
+  gap: 2px;
+}
+
+.mini-cell {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: bold;
+  border: 1px solid var(--color-empty);
+}
+
+.mini-cell.absent {
+  background-color: var(--color-absent);
+  border-color: var(--color-absent);
+}
+
+.mini-cell.present {
+  background-color: var(--color-present);
+  border-color: var(--color-present);
+}
+
+.mini-cell.correct {
+  background-color: var(--color-correct);
+  border-color: var(--color-correct);
 }
 
 .board-row {
