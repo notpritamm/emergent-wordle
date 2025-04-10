@@ -379,9 +379,58 @@ function App() {
       });
       
       if (response.ok) {
-        await fetchRoomDetails(roomId);
+        const roomData = await fetchRoomDetails(roomId);
+        
+        // Save the room ID in local storage for session persistence
+        localStorage.setItem("wordleRoomId", roomId);
+        
         setCurrentView("room");
         connectToRoom(roomId);
+        
+        // Check if there's an active game in the room
+        if (roomData && roomData.gameState && roomData.gameState.active) {
+          // Fetch the full game state to see if this user is part of it
+          const gameStateResponse = await fetch(`${BACKEND_URL}/api/game/state/${roomId}?username=${username}`);
+          if (gameStateResponse.ok) {
+            const gameStateData = await gameStateResponse.json();
+            
+            if (gameStateData.active && gameStateData.currentWord && 
+                username in gameStateData.playerStates) {
+              // This user is part of an active game, resume it
+              setTargetWord(gameStateData.currentWord);
+              
+              // Load their board if they had one
+              const playerState = gameStateData.playerStates[username];
+              if (playerState.boardData && playerState.boardData.length > 0) {
+                setBoardData(playerState.boardData);
+                setCurrentAttempt(playerState.currentAttempt);
+              }
+              
+              // Load other players' boards
+              const othersBoards = {};
+              for (const [player, state] of Object.entries(gameStateData.playerStates)) {
+                if (player !== username && state.boardData) {
+                  othersBoards[player] = {
+                    boardData: state.boardData,
+                    currentAttempt: state.currentAttempt,
+                    gameOver: state.completed,
+                    won: state.won
+                  };
+                }
+              }
+              setOtherPlayersBoards(othersBoards);
+              
+              // Set game state based on player state
+              if (playerState.completed) {
+                setGameState(playerState.won ? "won" : "lost");
+              } else {
+                setGameState("playing");
+              }
+              
+              setCurrentView("game");
+            }
+          }
+        }
       } else {
         const error = await response.json();
         alert(error.detail || "Error joining room");
