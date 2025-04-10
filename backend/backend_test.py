@@ -1,207 +1,170 @@
 import requests
 import pytest
+import uuid
 from datetime import datetime
-import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+BACKEND_URL = "https://wordle-backend-402k.onrender.com/api"
 
-class WordleAPITester:
-    def __init__(self, base_url):
-        self.base_url = base_url
-        self.test_users = {}
-        self.test_rooms = {}
+class TestWordleAPI:
+    def setup_method(self):
+        self.test_username = f"test_user_{uuid.uuid4().hex[:8]}"
+        self.test_room_name = f"test_room_{uuid.uuid4().hex[:8]}"
+        self.test_word = "PYTHON"
 
-    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
-        """Run a single API test"""
-        url = f"{self.base_url}/api/{endpoint}"
-        headers = headers or {'Content-Type': 'application/json'}
-        
-        logger.info(f"\n🔍 Testing {name}...")
-        
-        try:
-            if method == 'GET':
-                response = requests.get(url, headers=headers)
-            elif method == 'POST':
-                response = requests.post(url, json=data, headers=headers)
-            elif method == 'DELETE':
-                response = requests.delete(url, json=data, headers=headers)
-
-            success = response.status_code == expected_status
-            if success:
-                logger.info(f"✅ {name} - Passed")
-                return True, response.json() if response.content else {}
-            else:
-                logger.error(f"❌ {name} - Failed. Expected {expected_status}, got {response.status_code}")
-                logger.error(f"Response: {response.text}")
-                return False, {}
-
-        except Exception as e:
-            logger.error(f"❌ {name} - Error: {str(e)}")
-            return False, {}
-
-    def test_user_login(self, username):
+    def test_login_flow(self):
         """Test user login functionality"""
-        success, response = self.run_test(
-            "User Login",
-            "POST",
-            "users/login",
-            200,
-            data={"username": username}
+        response = requests.post(
+            f"{BACKEND_URL}/users/login",
+            json={"username": self.test_username}
         )
-        if success:
-            self.test_users[username] = response
-        return success
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["username"] == self.test_username
+        assert "id" in data
 
-    def test_create_room(self, room_name, username, is_private=False, password=None):
-        """Test room creation"""
-        data = {
-            "room_data": {
-                "name": room_name,
-                "isPrivate": is_private,
-                "password": password,
-                "description": f"Test room created by {username}"
-            },
-            "user": {"username": username}
-        }
+    def test_room_creation_and_management(self):
+        """Test room creation and management flows"""
+        # Create public room
+        response = requests.post(
+            f"{BACKEND_URL}/rooms",
+            json={
+                "room_data": {
+                    "name": self.test_room_name,
+                    "isPrivate": False,
+                    "description": "Test room"
+                },
+                "user": {"username": self.test_username}
+            }
+        )
+        assert response.status_code == 200
+        room_data = response.json()
+        room_id = room_data["roomId"]
         
-        success, response = self.run_test(
-            f"Create Room ({room_name})",
-            "POST",
-            "rooms",
-            200,
-            data=data
+        # Verify room creation
+        response = requests.get(f"{BACKEND_URL}/rooms/{room_id}")
+        assert response.status_code == 200
+        room = response.json()
+        assert room["name"] == self.test_room_name
+        assert room["host"] == self.test_username
+        
+        # Add word to room
+        response = requests.post(
+            f"{BACKEND_URL}/rooms/words",
+            json={
+                "add_data": {
+                    "roomId": room_id,
+                    "word": self.test_word
+                },
+                "user": {"username": self.test_username}
+            }
+        )
+        assert response.status_code == 200
+        
+        # Get random word
+        response = requests.get(f"{BACKEND_URL}/rooms/{room_id}/words")
+        assert response.status_code == 200
+        assert "word" in response.json()
+        
+        # Leave room
+        response = requests.post(
+            f"{BACKEND_URL}/rooms/{room_id}/leave",
+            json={"username": self.test_username}
+        )
+        assert response.status_code == 200
+
+    def test_private_room_flow(self):
+        """Test private room creation and access"""
+        room_password = "testpass123"
+        
+        # Create private room
+        response = requests.post(
+            f"{BACKEND_URL}/rooms",
+            json={
+                "room_data": {
+                    "name": f"private_{self.test_room_name}",
+                    "isPrivate": True,
+                    "password": room_password,
+                    "description": "Private test room"
+                },
+                "user": {"username": self.test_username}
+            }
+        )
+        assert response.status_code == 200
+        room_id = response.json()["roomId"]
+        
+        # Try joining without password (should fail)
+        response = requests.post(
+            f"{BACKEND_URL}/rooms/join",
+            json={
+                "join_data": {
+                    "roomId": room_id,
+                    "password": ""
+                },
+                "user": {"username": f"other_user_{uuid.uuid4().hex[:8]}"}
+            }
+        )
+        assert response.status_code in [401, 403]
+        
+        # Join with correct password
+        response = requests.post(
+            f"{BACKEND_URL}/rooms/join",
+            json={
+                "join_data": {
+                    "roomId": room_id,
+                    "password": room_password
+                },
+                "user": {"username": f"other_user_{uuid.uuid4().hex[:8]}"}
+            }
+        )
+        assert response.status_code == 200
+
+    def test_game_flow(self):
+        """Test game play and scoring"""
+        # Create room and add word
+        response = requests.post(
+            f"{BACKEND_URL}/rooms",
+            json={
+                "room_data": {
+                    "name": self.test_room_name,
+                    "isPrivate": False
+                },
+                "user": {"username": self.test_username}
+            }
+        )
+        room_id = response.json()["roomId"]
+        
+        # Add test word
+        requests.post(
+            f"{BACKEND_URL}/rooms/words",
+            json={
+                "add_data": {
+                    "roomId": room_id,
+                    "word": self.test_word
+                },
+                "user": {"username": self.test_username}
+            }
         )
         
-        if success:
-            self.test_rooms[room_name] = response
-        return success
-
-    def test_join_room(self, room_id, username, password=None):
-        """Test joining a room"""
-        data = {
-            "join_data": {
-                "roomId": room_id,
-                "password": password
-            },
-            "user": {"username": username}
-        }
-        
-        return self.run_test(
-            f"Join Room ({room_id})",
-            "POST",
-            "rooms/join",
-            200,
-            data=data
-        )[0]
-
-    def test_add_word(self, room_id, word, username):
-        """Test adding a word to a room"""
-        data = {
-            "add_data": {
-                "roomId": room_id,
-                "word": word
-            },
-            "user": {"username": username}
-        }
-        
-        return self.run_test(
-            f"Add Word ({word})",
-            "POST",
-            "rooms/words",
-            200,
-            data=data
-        )[0]
-
-    def test_remove_word(self, room_id, word, username):
-        """Test removing a word from a room"""
-        data = {
-            "username": username
-        }
-        
-        return self.run_test(
-            f"Remove Word ({word})",
-            "DELETE",
-            f"rooms/{room_id}/words/{word}",
-            200,
-            data=data
-        )[0]
-
-    def test_get_rooms(self, is_public=True):
-        """Test getting room list"""
-        success, response = self.run_test(
-            "Get Rooms",
-            "GET",
-            f"rooms?is_public={str(is_public).lower()}",
-            200
+        # Submit game score
+        response = requests.post(
+            f"{BACKEND_URL}/scores",
+            json={
+                "username": self.test_username,
+                "won": True,
+                "word": self.test_word,
+                "attempts": 3,
+                "roomId": room_id
+            }
         )
-        return success, response
-
-def main():
-    # Initialize tester with backend URL
-    base_url = "http://localhost:8001"  # Using local backend
-    tester = WordleAPITester(base_url)
-    
-    # Test variables
-    timestamp = datetime.now().strftime('%H%M%S')
-    test_user1 = f"test_user1_{timestamp}"
-    test_user2 = f"test_user2_{timestamp}"
-    test_room_public = f"test_room_public_{timestamp}"
-    test_room_private = f"test_room_private_{timestamp}"
-    
-    tests_passed = 0
-    total_tests = 0
-
-    try:
-        # 1. Test user login
-        total_tests += 2
-        if tester.test_user_login(test_user1):
-            tests_passed += 1
-            logger.info("✅ User 1 login successful")
-        if tester.test_user_login(test_user2):
-            tests_passed += 1
-            logger.info("✅ User 2 login successful")
-
-        # 2. Test room creation
-        total_tests += 2
-        if tester.test_create_room(test_room_public, test_user1):
-            tests_passed += 1
-            logger.info("✅ Public room creation successful")
-        if tester.test_create_room(test_room_private, test_user1, True, "test123"):
-            tests_passed += 1
-            logger.info("✅ Private room creation successful")
-
-        # Get room IDs
-        success, rooms = tester.test_get_rooms()
-        if success:
-            public_room = next((r for r in rooms if r['name'] == test_room_public), None)
-            if public_room:
-                # 3. Test joining rooms
-                total_tests += 2
-                if tester.test_join_room(public_room['id'], test_user2):
-                    tests_passed += 1
-                    logger.info("✅ Joining public room successful")
-                
-                # 4. Test word management
-                total_tests += 2
-                if tester.test_add_word(public_room['id'], "TEST", test_user1):
-                    tests_passed += 1
-                    logger.info("✅ Adding word successful")
-                if tester.test_remove_word(public_room['id'], "TEST", test_user1):
-                    tests_passed += 1
-                    logger.info("✅ Removing word successful")
-
-        # Print summary
-        logger.info(f"\n📊 Test Summary:")
-        logger.info(f"Tests Passed: {tests_passed}/{total_tests}")
+        assert response.status_code == 200
         
-        return tests_passed == total_tests
-
-    except Exception as e:
-        logger.error(f"❌ Test suite error: {str(e)}")
-        return False
+        # Check room leaderboard
+        response = requests.get(f"{BACKEND_URL}/rooms/{room_id}/leaderboard")
+        assert response.status_code == 200
+        leaderboard = response.json()
+        assert len(leaderboard) > 0
+        assert any(entry["username"] == self.test_username for entry in leaderboard)
 
 if __name__ == "__main__":
-    success = main()
-    exit(0 if success else 1)
+    pytest.main([__file__])
