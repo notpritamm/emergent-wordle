@@ -57,11 +57,13 @@ class WordleAPITester:
     def test_create_room(self, room_name, username, is_private=False, password=None):
         """Test room creation"""
         data = {
-            "user": {"username": username},
-            "name": room_name,
-            "isPrivate": is_private,
-            "password": password,
-            "description": f"Test room created by {username}"
+            "room_data": {
+                "name": room_name,
+                "isPrivate": is_private,
+                "password": password,
+                "description": f"Test room created by {username}"
+            },
+            "user": {"username": username}
         }
         
         success, response = self.run_test(
