@@ -364,20 +364,22 @@ async def get_rooms(is_public: bool = Query(None), sort_by: str = Query("created
             rooms = await cursor.to_list(length=100)
         
         # Format the response
-        return [
-            {
-                "id": room.get("id"),
-                "name": room.get("name"),
-                "host": room.get("host"),
-                "memberCount": len(room.get("members", [])),
-                "isPrivate": room.get("isPrivate", False),
-                "description": room.get("description"),
-                "wordCount": len(room.get("words", [])),
-                "createdAt": room.get("createdAt"),
-                "gameActive": room.get("gameState", {}).get("active", False),
-                "isTest": room.get("isTest", False)
-            } for room in rooms
-        ]
+        result = []
+        for room in rooms:
+            if room:  # Skip None values
+                result.append({
+                    "id": room.get("id"),
+                    "name": room.get("name", "Unnamed Room"),
+                    "host": room.get("host", "Unknown"),
+                    "memberCount": len(room.get("members", [])),
+                    "isPrivate": room.get("isPrivate", False),
+                    "description": room.get("description", ""),
+                    "wordCount": len(room.get("words", [])),
+                    "createdAt": room.get("createdAt", datetime.now()),
+                    "gameActive": room.get("gameState", {}).get("active", False) if room.get("gameState") else False,
+                    "isTest": room.get("isTest", False)
+                })
+        return result
     
     except Exception as e:
         logger.error(f"Error fetching rooms: {str(e)}")
