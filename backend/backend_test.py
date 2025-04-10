@@ -99,9 +99,11 @@ class WordleAPITester:
     def test_add_word(self, room_id, word, username):
         """Test adding a word to a room"""
         data = {
-            "user": {"username": username},
-            "roomId": room_id,
-            "word": word
+            "add_data": {
+                "roomId": room_id,
+                "word": word
+            },
+            "user": {"username": username}
         }
         
         return self.run_test(
