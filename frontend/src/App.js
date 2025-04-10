@@ -33,6 +33,7 @@ function App() {
   const [letterStatus, setLetterStatus] = useState({});
   const [showKeyboard, setShowKeyboard] = useState(true);
   const gridRefs = useRef([]);
+  const [otherPlayersBoards, setOtherPlayersBoards] = useState({});
   
   // Game Stats
   const [gameStats, setGameStats] = useState({
