@@ -252,8 +252,8 @@ function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          user: { username },
-          ...newRoomData
+          room_data: newRoomData,
+          user: { username }
         }),
       });
       
@@ -270,7 +270,8 @@ function App() {
         // Join the new room
         await joinRoom(data.roomId);
       } else {
-        alert("Error creating room. Please try again.");
+        const errorData = await response.json().catch(() => ({}));
+        alert(errorData.detail || "Error creating room. Please try again.");
       }
     } catch (error) {
       console.error("Error creating room:", error);
