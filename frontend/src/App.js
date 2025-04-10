@@ -911,6 +911,7 @@ function App() {
   // Logout user
   const handleLogout = () => {
     localStorage.removeItem("wordleUsername");
+    localStorage.removeItem("wordleRoomId");
     setUsername("");
     setIsLoggedIn(false);
     setCurrentView("login");
@@ -921,6 +922,26 @@ function App() {
     if (socket) {
       socket.close();
       setSocket(null);
+    }
+  };
+
+  // Delete test rooms
+  const cleanupTestRooms = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/cleanup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Cleaned up ${data.deletedCount} test rooms`);
+        fetchRooms();
+      }
+    } catch (error) {
+      console.error("Error cleaning up test rooms:", error);
     }
   };
 
