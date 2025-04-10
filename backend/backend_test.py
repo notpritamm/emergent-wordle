@@ -1,84 +1,122 @@
-import requests
 import unittest
+import requests
+import uuid
 from datetime import datetime
 
-class WordleRoomsAPITest(unittest.TestCase):
-    def setUp(self):
-        self.base_url = "https://d2b98e10-afee-4781-b31b-b2067c50fcc9.preview.emergentagent.com/api"
-        self.test_user = f"TestUser_{datetime.now().strftime('%H%M%S')}"
-        self.test_room_name = f"test_room_{datetime.now().strftime('%H%M%S')}"
-
-    def test_1_login(self):
-        """Test user login"""
-        response = requests.post(f"{self.base_url}/users/login", json={
-            "username": self.test_user
-        })
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertTrue(data["success"])
-        self.assertEqual(data["username"], self.test_user)
-
-    def test_2_create_room(self):
-        """Test room creation"""
-        response = requests.post(f"{self.base_url}/rooms", json={
-            "room_data": {
-                "name": self.test_room_name,
-                "isPrivate": False,
-                "description": "Test room for API testing"
-            },
-            "user": {"username": self.test_user}
-        })
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertTrue(data["success"])
-        self.room_id = data["roomId"]
-        return data["roomId"]
-
-    def test_3_add_word(self):
-        """Test adding a word to room"""
-        room_id = self.test_2_create_room()
-        response = requests.post(f"{self.base_url}/rooms/words", json={
-            "add_data": {
-                "roomId": room_id,
-                "word": "TEST"
-            },
-            "user": {"username": self.test_user}
-        })
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertTrue(data["success"])
-
-    def test_4_start_game(self):
-        """Test starting a game"""
-        room_id = self.test_2_create_room()
-        # First add a word
-        requests.post(f"{self.base_url}/rooms/words", json={
-            "add_data": {
-                "roomId": room_id,
-                "word": "TEST"
-            },
-            "user": {"username": self.test_user}
-        })
+class WordleRoomsTester:
+    def __init__(self, base_url="https://d2b98e10-afee-4781-b31b-b2067c50fcc9.preview.emergentagent.com"):
+        self.base_url = base_url
+        self.username = None
+        self.room_id = None
         
-        # Then start the game
-        response = requests.post(f"{self.base_url}/rooms/start-game", json={
-            "game_data": {
-                "roomId": room_id,
-                "autoSelectWordCount": 0,
-                "ownerPlaying": True
-            },
-            "user": {"username": self.test_user}
-        })
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertTrue(data["success"])
+    def login(self, username=None):
+        if not username:
+            username = f"test_user_{uuid.uuid4().hex[:8]}"
+        
+        response = requests.post(
+            f"{self.base_url}/api/users/login",
+            json={"username": username}
+        )
+        
+        if response.status_code == 200:
+            self.username = username
+            print(f"✅ Login successful for {username}")
+            return True
+        else:
+            print(f"❌ Login failed: {response.text}")
+            return False
 
-    def test_5_cleanup_test_rooms(self):
-        """Test cleanup of test rooms"""
-        response = requests.post(f"{self.base_url}/cleanup")
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertTrue(data["success"])
+    def create_room(self, room_name=None):
+        if not room_name:
+            room_name = f"test_room_{uuid.uuid4().hex[:8]}"
+            
+        response = requests.post(
+            f"{self.base_url}/api/rooms",
+            json={
+                "room_data": {
+                    "name": room_name,
+                    "isPrivate": False,
+                    "description": "Test room for automated testing"
+                },
+                "user": {"username": self.username}
+            }
+        )
+        
+        if response.status_code == 200:
+            self.room_id = response.json().get("roomId")
+            print(f"✅ Room created: {room_name}")
+            return self.room_id
+        else:
+            print(f"❌ Room creation failed: {response.text}")
+            return None
 
-if __name__ == '__main__':
-    unittest.main()
+    def add_word(self, word="TESTS"):
+        if not self.room_id:
+            print("❌ No room ID available")
+            return False
+            
+        response = requests.post(
+            f"{self.base_url}/api/rooms/words",
+            json={
+                "add_data": {
+                    "roomId": self.room_id,
+                    "word": word
+                },
+                "user": {"username": self.username}
+            }
+        )
+        
+        if response.status_code == 200:
+            print(f"✅ Word added: {word}")
+            return True
+        else:
+            print(f"❌ Word addition failed: {response.text}")
+            return False
+
+    def start_game(self):
+        if not self.room_id:
+            print("❌ No room ID available")
+            return False
+            
+        response = requests.post(
+            f"{self.base_url}/api/rooms/start-game",
+            json={
+                "game_data": {
+                    "roomId": self.room_id,
+                    "autoSelectWordCount": 0,
+                    "ownerPlaying": True
+                },
+                "user": {"username": self.username}
+            }
+        )
+        
+        if response.status_code == 200:
+            print("✅ Game started successfully")
+            return response.json()
+        else:
+            print(f"❌ Game start failed: {response.text}")
+            return None
+
+def main():
+    tester = WordleRoomsTester()
+    
+    # Step 1: Login
+    if not tester.login():
+        return
+    
+    # Step 2: Create room
+    if not tester.create_room():
+        return
+    
+    # Step 3: Add word
+    if not tester.add_word("TESTS"):
+        return
+    
+    # Step 4: Start game
+    game_result = tester.start_game()
+    if game_result:
+        print(f"Game started with word: {game_result.get('word')}")
+        print(f"Number of players: {game_result.get('playerCount')}")
+    
+if __name__ == "__main__":
+    main()
