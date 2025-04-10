@@ -819,6 +819,11 @@ header {
   font-weight: bold;
 }
 
+.primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .secondary-button {
   padding: 0.8rem;
   background-color: var(--color-input-bg);
@@ -826,6 +831,30 @@ header {
   border: 1px solid var(--color-empty);
   border-radius: 4px;
   cursor: pointer;
+}
+
+.game-settings {
+  background-color: var(--color-card-bg);
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.setting-help {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin-top: 0.2rem;
+}
+
+.game-status.active {
+  color: var(--color-accent);
+  font-weight: bold;
 }
 
 .chat-container {
