@@ -768,6 +768,9 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
 @app.post("/api/rooms/start-game")
 async def start_game(game_data: RoomStartGame = Body(...), user: User = Body(...)):
     try:
+        # Log the incoming data for debugging
+        logger.info(f"Starting game with roomId: {game_data.roomId}, user: {user.username}")
+        
         room = await db.rooms.find_one({"id": game_data.roomId})
         
         if not room:
