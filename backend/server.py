@@ -279,15 +279,35 @@ async def create_room(room_data: RoomCreate, user: User = Body(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/rooms")
-async def get_rooms(is_public: bool = Query(None)):
+async def get_rooms(is_public: bool = Query(None), sort_by: str = Query("createdAt"), sort_order: str = Query("desc")):
     try:
         # Filter for public rooms or all rooms
         filter_query = {}
         if is_public is not None:
             filter_query["isPrivate"] = not is_public
         
-        cursor = db.rooms.find(filter_query)
-        rooms = await cursor.to_list(length=100)
+        # Determine sort direction
+        sort_direction = -1 if sort_order.lower() == "desc" else 1
+        
+        # Set sort field
+        valid_sort_fields = ["createdAt", "name", "memberCount", "wordCount"]
+        sort_field = sort_by if sort_by in valid_sort_fields else "createdAt"
+        
+        # Handle special sort cases
+        if sort_field == "memberCount":
+            # Get rooms and sort in memory (MongoDB can't sort by array length directly)
+            cursor = db.rooms.find(filter_query)
+            rooms = await cursor.to_list(length=100)
+            rooms.sort(key=lambda r: len(r.get("members", [])), reverse=(sort_direction == -1))
+        elif sort_field == "wordCount":
+            # Same approach for wordCount
+            cursor = db.rooms.find(filter_query)
+            rooms = await cursor.to_list(length=100)
+            rooms.sort(key=lambda r: len(r.get("words", [])), reverse=(sort_direction == -1))
+        else:
+            # Standard MongoDB sort
+            cursor = db.rooms.find(filter_query).sort(sort_field, sort_direction)
+            rooms = await cursor.to_list(length=100)
         
         # Format the response
         return [
@@ -299,7 +319,9 @@ async def get_rooms(is_public: bool = Query(None)):
                 "isPrivate": room.get("isPrivate", False),
                 "description": room.get("description"),
                 "wordCount": len(room.get("words", [])),
-                "createdAt": room.get("createdAt")
+                "createdAt": room.get("createdAt"),
+                "gameActive": room.get("gameState", {}).get("active", False),
+                "isTest": room.get("isTest", False)
             } for room in rooms
         ]
     
