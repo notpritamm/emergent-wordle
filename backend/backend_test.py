@@ -117,7 +117,7 @@ class WordleAPITester:
     def test_remove_word(self, room_id, word, username):
         """Test removing a word from a room"""
         data = {
-            "user": {"username": username}
+            "username": username
         }
         
         return self.run_test(
