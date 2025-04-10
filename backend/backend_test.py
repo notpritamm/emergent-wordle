@@ -17,8 +17,8 @@ class WordleRoomTest(unittest.TestCase):
         
         # 1. Login both users
         print("1. Testing user login...")
-        user1_response = requests.post(f"{BACKEND_URL}/users/login", json={"username": self.user1})
-        user2_response = requests.post(f"{BACKEND_URL}/users/login", json={"username": self.user2})
+        user1_response = requests.post(f"{BACKEND_URL}/auth/login", json={"username": self.user1})
+        user2_response = requests.post(f"{BACKEND_URL}/auth/login", json={"username": self.user2})
         
         self.assertEqual(user1_response.status_code, 200)
         self.assertEqual(user2_response.status_code, 200)
