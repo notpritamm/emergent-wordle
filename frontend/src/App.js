@@ -116,6 +116,9 @@ function App() {
       setCurrentAttempt(0);
       setLetterStatus({});
       gridRefs.current = Array(MAX_ATTEMPTS).fill().map(() => Array(targetWord.length).fill(null));
+      
+      // Reset other players' boards when starting a new game
+      setOtherPlayersBoards({});
     }
   }, [gameState, targetWord]);
 
