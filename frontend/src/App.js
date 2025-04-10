@@ -457,6 +457,7 @@ function App() {
       console.error("Error fetching room details:", error);
       alert("Error loading room. Please try again.");
       setCurrentView("rooms");
+      localStorage.removeItem("wordleRoomId");
       return null;
     }
   };
