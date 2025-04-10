@@ -1205,6 +1205,18 @@ function App() {
       <div className="rooms-container">
         <div className="rooms-header">
           <h2>Game Rooms</h2>
+          <div className="admin-actions">
+            <button 
+              className="secondary-button cleanup-button" 
+              onClick={cleanupTestRooms}
+              title="Delete old test rooms"
+            >
+              🧹 Cleanup Test Rooms
+            </button>
+          </div>
+        </div>
+        
+        <div className="rooms-filter-bar">
           <div className="rooms-filter">
             <button 
               className={`filter-button ${!showPrivateRooms ? 'active' : ''}`} 
@@ -1217,6 +1229,29 @@ function App() {
               onClick={() => setShowPrivateRooms(true)}
             >
               Private Rooms
+            </button>
+          </div>
+          
+          <div className="rooms-sort">
+            <span>Sort by:</span>
+            <select 
+              value={roomSortOptions.sortBy}
+              onChange={(e) => updateRoomSort(e.target.value, roomSortOptions.sortOrder)}
+            >
+              <option value="createdAt">Created Date</option>
+              <option value="name">Room Name</option>
+              <option value="memberCount">Member Count</option>
+              <option value="wordCount">Word Count</option>
+            </select>
+            <button 
+              className={`sort-order-button ${roomSortOptions.sortOrder === 'asc' ? 'asc' : 'desc'}`} 
+              onClick={() => updateRoomSort(
+                roomSortOptions.sortBy, 
+                roomSortOptions.sortOrder === 'asc' ? 'desc' : 'asc'
+              )}
+              title={roomSortOptions.sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+            >
+              {roomSortOptions.sortOrder === 'asc' ? '↑' : '↓'}
             </button>
           </div>
         </div>
@@ -1275,12 +1310,20 @@ function App() {
           ) : (
             <div className="room-cards">
               {rooms.map(room => (
-                <div key={room.id} className="room-card">
+                <div key={room.id} className={`room-card ${room.isTest ? 'test-room' : ''} ${room.gameActive ? 'game-active' : ''}`}>
                   <div className="room-card-header">
                     <h4>{room.name}</h4>
-                    <span className={`room-privacy ${room.isPrivate ? 'private' : 'public'}`}>
-                      {room.isPrivate ? '🔒 Private' : '🌐 Public'}
-                    </span>
+                    <div className="room-badges">
+                      <span className={`room-privacy ${room.isPrivate ? 'private' : 'public'}`}>
+                        {room.isPrivate ? '🔒 Private' : '🌐 Public'}
+                      </span>
+                      {room.isTest && (
+                        <span className="room-test-badge">TEST</span>
+                      )}
+                      {room.gameActive && (
+                        <span className="room-game-badge">GAME IN PROGRESS</span>
+                      )}
+                    </div>
                   </div>
                   {room.description && (
                     <p className="room-card-description">{room.description}</p>
