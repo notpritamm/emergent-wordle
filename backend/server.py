@@ -343,7 +343,7 @@ async def join_room(join_data: RoomJoin, user: User = Body(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/rooms/{room_id}/leave")
-async def leave_room(room_id: str, user: User = Body(...)):
+async def leave_room(room_id: str, username: str = Body(...)):
     try:
         room = await db.rooms.find_one({"id": room_id})
         
@@ -353,25 +353,25 @@ async def leave_room(room_id: str, user: User = Body(...)):
         # Remove user from members
         await db.rooms.update_one(
             {"id": room_id},
-            {"$pull": {"members": user.username}}
+            {"$pull": {"members": username}}
         )
         
         # If the user was the host, assign a new host or delete the room
-        if room.get("host") == user.username:
+        if room.get("host") == username:
             if len(room.get("members", [])) <= 1:
                 # Delete the room if no other members
                 await db.rooms.delete_one({"id": room_id})
                 return {"success": True, "message": "Room deleted"}
             else:
                 # Assign a new host
-                new_host = next((m for m in room.get("members", []) if m != user.username), None)
+                new_host = next((m for m in room.get("members", []) if m != username), None)
                 if new_host:
                     await db.rooms.update_one(
                         {"id": room_id},
                         {"$set": {"host": new_host}}
                     )
         
-        logger.info(f"User {user.username} left room {room_id}")
+        logger.info(f"User {username} left room {room_id}")
         
         return {"success": True}
     
