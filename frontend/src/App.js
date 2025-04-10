@@ -288,9 +288,11 @@ function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          user: { username },
-          roomId,
-          password
+          join_data: {
+            roomId,
+            password
+          },
+          user: { username }
         }),
       });
       
