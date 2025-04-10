@@ -81,9 +81,11 @@ class WordleAPITester:
     def test_join_room(self, room_id, username, password=None):
         """Test joining a room"""
         data = {
-            "user": {"username": username},
-            "roomId": room_id,
-            "password": password
+            "join_data": {
+                "roomId": room_id,
+                "password": password
+            },
+            "user": {"username": username}
         }
         
         return self.run_test(
