@@ -74,9 +74,16 @@ function App() {
   // Initialize on login
   useEffect(() => {
     const savedUsername = localStorage.getItem("wordleUsername");
+    const savedRoomId = localStorage.getItem("wordleRoomId");
+    
     if (savedUsername) {
       setUsername(savedUsername);
       handleLogin(savedUsername, true);
+      
+      // If there was a saved room, try to rejoin it after login
+      if (savedRoomId) {
+        // We'll handle this after login is successful in the handleLogin function
+      }
     }
   }, []);
 
