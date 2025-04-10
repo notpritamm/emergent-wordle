@@ -455,6 +455,27 @@ header {
   border-bottom: 1px solid var(--color-empty);
 }
 
+.admin-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.cleanup-button {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.rooms-filter-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--color-card-bg);
+  padding: 0.8rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 .rooms-filter {
   display: flex;
   gap: 0.5rem;
@@ -471,6 +492,42 @@ header {
 
 .filter-button.active {
   background-color: var(--color-accent);
+}
+
+.rooms-sort {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rooms-sort select {
+  padding: 0.4rem 0.6rem;
+  background-color: var(--color-input-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-empty);
+  border-radius: 4px;
+}
+
+.sort-order-button {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-input-bg);
+  color: var(--color-text);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1.2rem;
+}
+
+.sort-order-button.asc {
+  transform: rotate(0deg);
+}
+
+.sort-order-button.desc {
+  transform: rotate(180deg);
 }
 
 .create-room {
