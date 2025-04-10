@@ -766,18 +766,29 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
 
 # New endpoints for game management
 @app.post("/api/rooms/start-game")
-async def start_game(game_data: RoomStartGame = Body(...), user: User = Body(...)):
+async def start_game(
+    body: dict = Body(...)
+):
     try:
-        # Log the incoming data for debugging
-        logger.info(f"Starting game with roomId: {game_data.roomId}, user: {user.username}")
+        # Extract data from the nested body structure
+        game_data = body.get("game_data", {})
+        user_data = body.get("user", {})
         
-        room = await db.rooms.find_one({"id": game_data.roomId})
+        room_id = game_data.get("roomId")
+        username = user_data.get("username")
+        auto_select_word_count = game_data.get("autoSelectWordCount", 0)
+        owner_playing = game_data.get("ownerPlaying", True)
+        
+        # Log the incoming data for debugging
+        logger.info(f"Starting game with roomId: {room_id}, user: {username}")
+        
+        room = await db.rooms.find_one({"id": room_id})
         
         if not room:
             raise HTTPException(status_code=404, detail="Room not found")
         
         # Only allow the host to start a game
-        if room.get("host") != user.username:
+        if room.get("host") != username:
             raise HTTPException(status_code=403, detail="Only the host can start a game")
         
         # Check if game is already in progress
@@ -791,10 +802,10 @@ async def start_game(game_data: RoomStartGame = Body(...), user: User = Body(...
         
         # Auto-select words if specified
         target_word = None
-        if game_data.autoSelectWordCount > 0:
+        if auto_select_word_count > 0:
             # Randomly select a word from the room's word list
-            if game_data.autoSelectWordCount > len(words):
-                game_data.autoSelectWordCount = len(words)
+            if auto_select_word_count > len(words):
+                auto_select_word_count = len(words)
             selected_word = random.choice(words)
             # Handle the case where the word might be a string or a dict
             if isinstance(selected_word, dict):
@@ -813,7 +824,7 @@ async def start_game(game_data: RoomStartGame = Body(...), user: User = Body(...
         player_states = {}
         for member in room.get("members", []):
             # Skip the host if they aren't playing
-            if member == user.username and not game_data.ownerPlaying:
+            if member == username and not owner_playing:
                 continue
                 
             player_states[member] = {
@@ -830,28 +841,28 @@ async def start_game(game_data: RoomStartGame = Body(...), user: User = Body(...
             "startedAt": datetime.now(),
             "endedAt": None,
             "playerStates": player_states,
-            "autoSelectWordCount": game_data.autoSelectWordCount,
-            "ownerPlaying": game_data.ownerPlaying
+            "autoSelectWordCount": auto_select_word_count,
+            "ownerPlaying": owner_playing
         }
         
         # Save game state to room
         await db.rooms.update_one(
-            {"id": game_data.roomId},
+            {"id": room_id},
             {"$set": {"gameState": game_state}}
         )
         
         # Notify all members about game start
         game_start_message = {
             "type": "system",
-            "content": f"Game started by {user.username}! The word has {len(target_word)} letters.",
+            "content": f"Game started by {username}! The word has {len(target_word)} letters.",
             "sender": "system",
             "timestamp": datetime.now().isoformat()
         }
-        await manager.broadcast(json.dumps(game_start_message), game_data.roomId)
+        await manager.broadcast(json.dumps(game_start_message), room_id)
         
         # Store the game start message
         await db.rooms.update_one(
-            {"id": game_data.roomId},
+            {"id": room_id},
             {"$push": {"messages": game_start_message}}
         )
         
@@ -861,9 +872,9 @@ async def start_game(game_data: RoomStartGame = Body(...), user: User = Body(...
             "word": target_word,
             "timestamp": datetime.now().isoformat()
         }
-        await manager.broadcast(json.dumps(game_data_message), game_data.roomId)
+        await manager.broadcast(json.dumps(game_data_message), room_id)
         
-        logger.info(f"Game started in room {game_data.roomId} by {user.username}")
+        logger.info(f"Game started in room {room_id} by {username}")
         
         return {
             "success": True,
