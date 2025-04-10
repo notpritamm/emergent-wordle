@@ -3,7 +3,7 @@ import pytest
 import uuid
 from datetime import datetime
 
-BACKEND_URL = "https://wordle-backend-402k.onrender.com/api"
+BACKEND_URL = "https://85c2b0cf-e501-4233-882d-4d6c39675089.preview.emergentagent.com/api"
 
 class TestWordleAPI:
     def setup_method(self):
