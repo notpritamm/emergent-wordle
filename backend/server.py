@@ -293,7 +293,15 @@ async def get_room(room_id: str):
         if "password" in room:
             del room["password"]
         
-        return room
+        # Convert MongoDB document to JSON-serializable dictionary
+        room_dict = {}
+        for key, value in room.items():
+            if key == "_id":
+                room_dict["_id"] = str(value)
+            else:
+                room_dict[key] = value
+        
+        return room_dict
     
     except HTTPException as he:
         raise he
