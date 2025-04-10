@@ -974,6 +974,40 @@ function App() {
     );
   };
 
+  // Render other players' boards
+  const renderOtherPlayersBoards = () => {
+    if (!otherPlayersBoards || Object.keys(otherPlayersBoards).length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="other-players-boards">
+        <h3>Other Players</h3>
+        <div className="other-players-container">
+          {Object.entries(otherPlayersBoards).map(([player, state]) => (
+            <div key={player} className="other-player-board">
+              <h4>{player} {state.gameOver && (state.won ? '✅' : '❌')}</h4>
+              <div className="mini-board">
+                {state.boardData.map((row, rowIndex) => (
+                  <div key={`mini-row-${player}-${rowIndex}`} className="mini-row">
+                    {row.map((cell, cellIndex) => (
+                      <div 
+                        key={`mini-cell-${player}-${rowIndex}-${cellIndex}`}
+                        className={`mini-cell ${cell.status}`}
+                      >
+                        {cell.letter}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // Render room details
   const renderRoomDetails = () => {
     if (!currentRoom) return null;
