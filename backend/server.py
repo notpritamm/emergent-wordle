@@ -260,7 +260,8 @@ async def create_room(room_data: RoomCreate, user: User = Body(...)):
             members=[user.username],
             isPrivate=room_data.isPrivate,
             password=room_data.password,
-            description=room_data.description
+            description=room_data.description,
+            isTest=room_data.name.lower().startswith("test_") # Mark test rooms automatically
         )
         
         await db.rooms.insert_one(new_room.dict())
