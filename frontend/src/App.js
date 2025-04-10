@@ -312,7 +312,7 @@ function App() {
     if (isLoggedIn && currentView === "rooms") {
       fetchRooms();
     }
-  }, [isLoggedIn, currentView, showPrivateRooms]);
+  }, [isLoggedIn, currentView, showPrivateRooms, roomSortOptions]);
 
   // Create a new room
   const createRoom = async () => {
