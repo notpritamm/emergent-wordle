@@ -134,7 +134,7 @@ class WordleAPITester:
 
 def main():
     # Initialize tester with backend URL
-    base_url = "https://wordle-backend-3kgv.onrender.com"  # Using the public endpoint
+    base_url = "http://localhost:8001"  # Using local backend
     tester = WordleAPITester(base_url)
     
     # Test variables
