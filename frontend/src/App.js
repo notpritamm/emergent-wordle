@@ -1431,73 +1431,119 @@ function App() {
             )}
           </div>
           
-          <div className="game-board">
-            {boardData.map((row, rowIndex) => (
-              <div key={`row-${rowIndex}`} className={`board-row row-${rowIndex}`}>
-                {row.map((cell, cellIndex) => (
-                  <div 
-                    key={`cell-${rowIndex}-${cellIndex}`}
-                    className={`cell ${cell.status}`}
-                    onClick={() => handleCellClick(rowIndex, cellIndex)}
-                  >
-                    {rowIndex === currentAttempt ? (
-                      <input
-                        ref={el => {
-                          if (gridRefs.current[rowIndex]) {
-                            gridRefs.current[rowIndex][cellIndex] = el;
-                          }
-                        }}
-                        type="text"
-                        maxLength="1"
-                        value={cell.letter}
-                        onChange={(e) => handleCellInput(rowIndex, cellIndex, e.target.value)}
-                        disabled={gameState !== "playing" || rowIndex !== currentAttempt}
-                        className="cell-input"
-                      />
-                    ) : (
-                      <span>{cell.letter}</span>
-                    )}
+          <div className="game-layout">
+            <div className="game-board-container">
+              <div className="game-board">
+                {boardData.map((row, rowIndex) => (
+                  <div key={`row-${rowIndex}`} className={`board-row row-${rowIndex}`}>
+                    {row.map((cell, cellIndex) => (
+                      <div 
+                        key={`cell-${rowIndex}-${cellIndex}`}
+                        className={`cell ${cell.status}`}
+                        onClick={() => handleCellClick(rowIndex, cellIndex)}
+                      >
+                        {rowIndex === currentAttempt && gameState === "playing" ? (
+                          <input
+                            ref={el => {
+                              if (gridRefs.current[rowIndex]) {
+                                gridRefs.current[rowIndex][cellIndex] = el;
+                              }
+                            }}
+                            type="text"
+                            maxLength="1"
+                            value={cell.letter}
+                            onChange={(e) => handleCellInput(rowIndex, cellIndex, e.target.value)}
+                            disabled={gameState !== "playing" || rowIndex !== currentAttempt}
+                            className="cell-input"
+                          />
+                        ) : (
+                          <span>{cell.letter}</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>
-            ))}
-          </div>
-          
-          {gameState === "won" && (
-            <div className="game-message success">
-              <h2>Congratulations!</h2>
-              <p>You guessed the word in {currentAttempt + 1} attempts.</p>
-              <div className="button-group">
-                <button onClick={shareResults}>Share Results</button>
-                <button onClick={returnToRoom}>Back to Room</button>
+              
+              {gameState === "won" && (
+                <div className="game-message success">
+                  <h2>Congratulations!</h2>
+                  <p>You guessed the word in {currentAttempt + 1} attempts.</p>
+                  <div className="button-group">
+                    <button onClick={shareResults}>Share Results</button>
+                    <button onClick={returnToRoom}>Back to Room</button>
+                  </div>
+                </div>
+              )}
+              
+              {gameState === "lost" && (
+                <div className="game-message failure">
+                  <h2>Game Over</h2>
+                  <p>The word was: {targetWord}</p>
+                  <div className="button-group">
+                    <button onClick={shareResults}>Share Results</button>
+                    <button onClick={returnToRoom}>Back to Room</button>
+                  </div>
+                </div>
+              )}
+              
+              {gameState === "playing" && renderKeyboard()}
+              
+              <div className="game-info">
+                <p>Guess the {targetWord.length}-letter WORD in {MAX_ATTEMPTS} tries</p>
+                <p>
+                  <span className="color-box correct"></span> Correct letter, correct position
+                </p>
+                <p>
+                  <span className="color-box present"></span> Correct letter, wrong position
+                </p>
+                <p>
+                  <span className="color-box absent"></span> Letter not in word
+                </p>
               </div>
             </div>
-          )}
-          
-          {gameState === "lost" && (
-            <div className="game-message failure">
-              <h2>Game Over</h2>
-              <p>The word was: {targetWord}</p>
-              <div className="button-group">
-                <button onClick={shareResults}>Share Results</button>
-                <button onClick={returnToRoom}>Back to Room</button>
+            
+            <div className="game-sidebar">
+              {renderOtherPlayersBoards()}
+              
+              {/* Game Chat */}
+              <div className="game-chat">
+                <div className="chat-container game-chat-container">
+                  <div className="section-header">
+                    <h3>Game Chat</h3>
+                  </div>
+                  <div className="messages-container">
+                    {roomMessages.map((msg, index) => (
+                      <div 
+                        key={index} 
+                        className={`message ${msg.sender === username ? 'own-message' : ''} ${msg.type === 'system' ? 'system-message' : ''}`}
+                      >
+                        {msg.type !== 'system' && <span className="message-sender">{msg.sender}</span>}
+                        <span className="message-content">{msg.content}</span>
+                        <span className="message-time">
+                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </div>
+                  <div className="chat-input-container">
+                    <input
+                      type="text"
+                      className="chat-input"
+                      placeholder="Type a message..."
+                      value={messageInput}
+                      onChange={(e) => setMessageInput(e.target.value)}
+                      onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                      ref={chatInputRef}
+                    />
+                    <button className="chat-send-button" onClick={sendMessage}>
+                      Send
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-          )}
-          
-          {gameState === "playing" && renderKeyboard()}
-          
-          <div className="game-info">
-            <p>Guess the {targetWord.length}-letter WORD in {MAX_ATTEMPTS} tries</p>
-            <p>
-              <span className="color-box correct"></span> Correct letter, correct position
-            </p>
-            <p>
-              <span className="color-box present"></span> Correct letter, wrong position
-            </p>
-            <p>
-              <span className="color-box absent"></span> Letter not in word
-            </p>
           </div>
         </div>
       )}
