@@ -580,7 +580,7 @@ function App() {
     }
   };
 
-  // Start a game with a random word from the room
+  // Start a game with a chosen word from the room
   const startGame = async () => {
     if (!currentRoom) return;
     
@@ -591,26 +591,33 @@ function App() {
         return;
       }
       
-      // Get a random word from the room
-      const response = await fetch(`${BACKEND_URL}/api/rooms/${currentRoom.id}/words`);
+      // Start the game with server
+      const response = await fetch(`${BACKEND_URL}/api/rooms/start-game`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          game_data: {
+            roomId: currentRoom.id,
+            autoSelectWordCount: gameStartOptions.autoSelectWordCount,
+            ownerPlaying: gameStartOptions.ownerPlaying
+          },
+          user: { username }
+        }),
+      });
+      
       if (response.ok) {
         const data = await response.json();
-        setTargetWord(data.word);
-        setGameState("playing");
-        setCurrentView("game");
+        console.log("Game started:", data);
+        // Game start will be handled by WebSocket message
       } else {
-        throw new Error("Failed to get a word");
+        const error = await response.json();
+        alert(error.detail || "Error starting game");
       }
     } catch (error) {
       console.error("Error starting game:", error);
-      
-      // Fallback to sample word list
-      const wordLength = Math.floor(Math.random() * (MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1)) + MIN_WORD_LENGTH;
-      const randomIndex = Math.floor(Math.random() * wordList[wordLength].length);
-      const newTargetWord = wordList[wordLength][randomIndex].toUpperCase();
-      setTargetWord(newTargetWord);
-      setGameState("playing");
-      setCurrentView("game");
+      alert("Error starting game. Please try again.");
     }
   };
 
