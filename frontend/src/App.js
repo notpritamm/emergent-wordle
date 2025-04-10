@@ -6,7 +6,7 @@ const MIN_WORD_LENGTH = 3;
 const MAX_WORD_LENGTH = 8;
 const MAX_ATTEMPTS = 6;
 
-// Sample word list (would be fetched from API in production)
+// Sample word list (fallback if no custom words are available)
 const wordList = {
   3: ["cat", "dog", "run", "sun", "big", "one", "two", "red", "joy", "box"],
   4: ["word", "play", "love", "time", "game", "book", "code", "blue", "home", "jump"],
@@ -17,37 +17,95 @@ const wordList = {
 };
 
 function App() {
+  // User and Auth State
   const [username, setUsername] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [gameState, setGameState] = useState("login"); // login, playing, won, lost
-  const [leaderboard, setLeaderboard] = useState([]);
+  
+  // App View State
+  const [currentView, setCurrentView] = useState("login"); // login, rooms, room, game, leaderboard
+  
+  // Game State
+  const [gameState, setGameState] = useState("waiting"); // waiting, playing, won, lost
   const [targetWord, setTargetWord] = useState("");
   const [currentAttempt, setCurrentAttempt] = useState(0);
   const [boardData, setBoardData] = useState([]);
   const [currentRowData, setCurrentRowData] = useState([]);
+  const [letterStatus, setLetterStatus] = useState({});
+  const [showKeyboard, setShowKeyboard] = useState(true);
+  const gridRefs = useRef([]);
+  
+  // Game Stats
   const [gameStats, setGameStats] = useState({
     played: 0,
     won: 0,
     currentStreak: 0,
     maxStreak: 0,
   });
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [showKeyboard, setShowKeyboard] = useState(true);
-  const [letterStatus, setLetterStatus] = useState({});
-  const gridRefs = useRef([]);
   
+  // Room State
+  const [rooms, setRooms] = useState([]);
+  const [currentRoom, setCurrentRoom] = useState(null);
+  const [roomMessages, setRoomMessages] = useState([]);
+  const [messageInput, setMessageInput] = useState("");
+  const [showPrivateRooms, setShowPrivateRooms] = useState(false);
+  const [roomPassword, setRoomPassword] = useState("");
+  const [newRoomData, setNewRoomData] = useState({
+    name: "",
+    description: "",
+    isPrivate: false,
+    password: ""
+  });
+  const [newWordInput, setNewWordInput] = useState("");
+  const [socket, setSocket] = useState(null);
+  
+  // Refs
+  const messagesEndRef = useRef(null);
+  const chatInputRef = useRef(null);
+
+  // Initialize on login
+  useEffect(() => {
+    const savedUsername = localStorage.getItem("wordleUsername");
+    if (savedUsername) {
+      setUsername(savedUsername);
+      handleLogin(savedUsername, true);
+    }
+  }, []);
+
+  // Cleanup WebSocket on unmount
+  useEffect(() => {
+    return () => {
+      if (socket) {
+        socket.close();
+      }
+    };
+  }, [socket]);
+
+  // Scroll to bottom of chat
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [roomMessages]);
+
   // Initialize game board
   useEffect(() => {
-    if (isLoggedIn) {
-      startNewGame();
-      loadUserStats();
-      fetchLeaderboard();
+    if (gameState === "playing" && targetWord) {
+      // Initialize board data and current row
+      const newBoardData = Array(MAX_ATTEMPTS).fill().map(() => 
+        Array(targetWord.length).fill().map(() => ({ letter: "", status: "empty" }))
+      );
+      
+      setBoardData(newBoardData);
+      setCurrentRowData(Array(targetWord.length).fill().map(() => ({ letter: "", status: "empty" })));
+      setCurrentAttempt(0);
+      setLetterStatus({});
+      gridRefs.current = Array(MAX_ATTEMPTS).fill().map(() => Array(targetWord.length).fill(null));
     }
-  }, [isLoggedIn]);
+  }, [gameState, targetWord]);
 
   // Save current attempt to board when currentRowData changes
   useEffect(() => {
-    if (currentRowData.length > 0) {
+    if (currentRowData.length > 0 && gameState === "playing") {
       let newBoardData = [...boardData];
       if (newBoardData[currentAttempt]) {
         newBoardData[currentAttempt] = currentRowData;
@@ -56,39 +114,57 @@ function App() {
     }
   }, [currentRowData]);
 
-  // Start a new game with random word
-  const startNewGame = () => {
-    // Pick a random word length between MIN_WORD_LENGTH and MAX_WORD_LENGTH
-    const wordLength = Math.floor(Math.random() * (MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1)) + MIN_WORD_LENGTH;
+  // Connect to WebSocket for room chat
+  const connectToRoom = (roomId) => {
+    if (socket) {
+      socket.close();
+    }
     
-    // Get a random word from the list
-    const randomIndex = Math.floor(Math.random() * wordList[wordLength].length);
-    const newTargetWord = wordList[wordLength][randomIndex].toUpperCase();
-    setTargetWord(newTargetWord);
+    const newSocket = new WebSocket(`${BACKEND_URL.replace('http', 'ws')}/api/ws/${roomId}?username=${username}`);
     
-    // Initialize board data and current row
-    const newBoardData = Array(MAX_ATTEMPTS).fill().map(() => 
-      Array(newTargetWord.length).fill().map(() => ({ letter: "", status: "empty" }))
-    );
+    newSocket.onopen = () => {
+      console.log("WebSocket connected");
+    };
     
-    setBoardData(newBoardData);
-    setCurrentRowData(Array(newTargetWord.length).fill().map(() => ({ letter: "", status: "empty" })));
-    setCurrentAttempt(0);
-    setGameState("playing");
-    setLetterStatus({});
-    gridRefs.current = Array(MAX_ATTEMPTS).fill().map(() => Array(newTargetWord.length).fill(null));
+    newSocket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      setRoomMessages(prev => [...prev, message]);
+    };
+    
+    newSocket.onclose = () => {
+      console.log("WebSocket disconnected");
+    };
+    
+    setSocket(newSocket);
+  };
+
+  // Send chat message
+  const sendMessage = () => {
+    if (!messageInput.trim() || !socket) return;
+    
+    const message = {
+      content: messageInput.trim(),
+      sender: username
+    };
+    
+    socket.send(JSON.stringify(message));
+    setMessageInput("");
+    
+    if (chatInputRef.current) {
+      chatInputRef.current.focus();
+    }
   };
 
   // Handle login
-  const handleLogin = async () => {
-    if (!username.trim()) {
+  const handleLogin = async (name = username, autoLogin = false) => {
+    if (!name.trim()) {
       alert("Please enter a username");
       return;
     }
     
     try {
       // Save username to local storage
-      localStorage.setItem("wordleUsername", username);
+      localStorage.setItem("wordleUsername", name);
       
       // Register user in backend (if not exists)
       const response = await fetch(`${BACKEND_URL}/api/users/login`, {
@@ -96,26 +172,31 @@ function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({ username: name }),
       });
       
       if (response.ok) {
+        setUsername(name);
         setIsLoggedIn(true);
-        setGameState("playing");
+        setCurrentView("rooms");
+        loadUserStats(name);
+        fetchRooms();
       } else {
         alert("Error logging in. Please try again.");
       }
     } catch (error) {
       console.error("Login error:", error);
-      // Fall back to local mode if backend is not available
-      setIsLoggedIn(true);
-      setGameState("playing");
+      if (autoLogin) {
+        // Silent fail for auto-login
+        return;
+      }
+      alert("Error connecting to server. Please try again.");
     }
   };
 
   // Load user stats
-  const loadUserStats = () => {
-    const savedStats = localStorage.getItem(`wordleStats_${username}`);
+  const loadUserStats = (name) => {
+    const savedStats = localStorage.getItem(`wordleStats_${name}`);
     if (savedStats) {
       setGameStats(JSON.parse(savedStats));
     }
@@ -127,17 +208,269 @@ function App() {
     setGameStats(newStats);
   };
 
-  // Fetch leaderboard data
-  const fetchLeaderboard = async () => {
+  // Fetch room list
+  const fetchRooms = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/leaderboard`);
+      const response = await fetch(`${BACKEND_URL}/api/rooms?is_public=${!showPrivateRooms}`);
       if (response.ok) {
         const data = await response.json();
-        setLeaderboard(data);
+        setRooms(data);
       }
     } catch (error) {
-      console.error("Error fetching leaderboard:", error);
-      // Fallback to local data if backend not available
+      console.error("Error fetching rooms:", error);
+    }
+  };
+
+  // Toggle public/private rooms
+  const toggleRoomType = () => {
+    setShowPrivateRooms(!showPrivateRooms);
+  };
+
+  useEffect(() => {
+    if (isLoggedIn && currentView === "rooms") {
+      fetchRooms();
+    }
+  }, [isLoggedIn, currentView, showPrivateRooms]);
+
+  // Create a new room
+  const createRoom = async () => {
+    if (!newRoomData.name.trim()) {
+      alert("Please enter a room name");
+      return;
+    }
+    
+    // Validate password for private rooms
+    if (newRoomData.isPrivate && !newRoomData.password.trim()) {
+      alert("Private rooms require a password");
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/rooms`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user: { username },
+          ...newRoomData
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Reset form
+        setNewRoomData({
+          name: "",
+          description: "",
+          isPrivate: false,
+          password: ""
+        });
+        
+        // Join the new room
+        await joinRoom(data.roomId);
+      } else {
+        alert("Error creating room. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error creating room:", error);
+      alert("Error creating room. Please try again.");
+    }
+  };
+
+  // Join a room
+  const joinRoom = async (roomId, password = "") => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/rooms/join`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user: { username },
+          roomId,
+          password
+        }),
+      });
+      
+      if (response.ok) {
+        await fetchRoomDetails(roomId);
+        setCurrentView("room");
+        connectToRoom(roomId);
+      } else {
+        const error = await response.json();
+        alert(error.detail || "Error joining room");
+      }
+    } catch (error) {
+      console.error("Error joining room:", error);
+      alert("Error joining room. Please try again.");
+    }
+  };
+
+  // Fetch room details
+  const fetchRoomDetails = async (roomId) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/rooms/${roomId}`);
+      if (response.ok) {
+        const roomData = await response.json();
+        setCurrentRoom(roomData);
+        setRoomMessages(roomData.messages || []);
+        return roomData;
+      } else {
+        throw new Error("Failed to fetch room details");
+      }
+    } catch (error) {
+      console.error("Error fetching room details:", error);
+      alert("Error loading room. Please try again.");
+      setCurrentView("rooms");
+      return null;
+    }
+  };
+
+  // Leave room
+  const leaveRoom = async () => {
+    if (!currentRoom) return;
+    
+    try {
+      await fetch(`${BACKEND_URL}/api/rooms/${currentRoom.id}/leave`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user: { username }
+        }),
+      });
+      
+      // Close WebSocket
+      if (socket) {
+        socket.close();
+        setSocket(null);
+      }
+      
+      setCurrentRoom(null);
+      setRoomMessages([]);
+      setCurrentView("rooms");
+      fetchRooms();
+      
+    } catch (error) {
+      console.error("Error leaving room:", error);
+    }
+  };
+
+  // Add word to room
+  const addWord = async () => {
+    if (!newWordInput.trim() || !currentRoom) {
+      alert("Please enter a valid word");
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/rooms/words`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user: { username },
+          roomId: currentRoom.id,
+          word: newWordInput.trim()
+        }),
+      });
+      
+      if (response.ok) {
+        setNewWordInput("");
+        await fetchRoomDetails(currentRoom.id);
+      } else {
+        const error = await response.json();
+        alert(error.detail || "Error adding word");
+      }
+    } catch (error) {
+      console.error("Error adding word:", error);
+      alert("Error adding word. Please try again.");
+    }
+  };
+
+  // Remove word from room
+  const removeWord = async (word) => {
+    if (!currentRoom) return;
+    
+    try {
+      await fetch(`${BACKEND_URL}/api/rooms/${currentRoom.id}/words/${word}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user: { username }
+        }),
+      });
+      
+      await fetchRoomDetails(currentRoom.id);
+      
+    } catch (error) {
+      console.error("Error removing word:", error);
+      alert("Error removing word. Please try again.");
+    }
+  };
+
+  // Manage room members
+  const manageMember = async (memberUsername, action) => {
+    if (!currentRoom) return;
+    
+    try {
+      await fetch(`${BACKEND_URL}/api/rooms/members`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user: { username },
+          roomId: currentRoom.id,
+          username: memberUsername,
+          action
+        }),
+      });
+      
+      await fetchRoomDetails(currentRoom.id);
+      
+    } catch (error) {
+      console.error(`Error ${action}ing member:`, error);
+      alert(`Error ${action}ing member. Please try again.`);
+    }
+  };
+
+  // Start a game with a random word from the room
+  const startGame = async () => {
+    if (!currentRoom) return;
+    
+    try {
+      // Check if room has words
+      if (!currentRoom.words || currentRoom.words.length === 0) {
+        alert("This room has no words yet. Add some words first!");
+        return;
+      }
+      
+      // Get a random word from the room
+      const response = await fetch(`${BACKEND_URL}/api/rooms/${currentRoom.id}/words`);
+      if (response.ok) {
+        const data = await response.json();
+        setTargetWord(data.word);
+        setGameState("playing");
+        setCurrentView("game");
+      } else {
+        throw new Error("Failed to get a word");
+      }
+    } catch (error) {
+      console.error("Error starting game:", error);
+      
+      // Fallback to sample word list
+      const wordLength = Math.floor(Math.random() * (MAX_WORD_LENGTH - MIN_WORD_LENGTH + 1)) + MIN_WORD_LENGTH;
+      const randomIndex = Math.floor(Math.random() * wordList[wordLength].length);
+      const newTargetWord = wordList[wordLength][randomIndex].toUpperCase();
+      setTargetWord(newTargetWord);
+      setGameState("playing");
+      setCurrentView("game");
     }
   };
 
@@ -153,15 +486,30 @@ function App() {
           username, 
           won, 
           word: targetWord,
-          attempts: currentAttempt + 1
+          attempts: currentAttempt + 1,
+          roomId: currentRoom ? currentRoom.id : null
         }),
       });
       
-      if (response.ok) {
-        fetchLeaderboard();
+      if (!response.ok) {
+        console.error("Error updating score");
       }
     } catch (error) {
       console.error("Error updating score:", error);
+    }
+  };
+
+  // Fetch room leaderboard
+  const fetchRoomLeaderboard = async (roomId) => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/rooms/${roomId}/leaderboard`);
+      if (response.ok) {
+        return await response.json();
+      }
+      return [];
+    } catch (error) {
+      console.error("Error fetching room leaderboard:", error);
+      return [];
     }
   };
 
@@ -353,7 +701,8 @@ function App() {
 
   // Share results
   const shareResults = () => {
-    let result = `Wordle ${targetWord.length}-letter: ${currentAttempt + 1}/${MAX_ATTEMPTS}\n\n`;
+    const roomName = currentRoom ? ` (${currentRoom.name})` : '';
+    let result = `Wordle${roomName}: ${currentAttempt + 1}/${MAX_ATTEMPTS}\n\n`;
     
     // Create emoji grid
     for (let i = 0; i <= currentAttempt; i++) {
@@ -377,12 +726,26 @@ function App() {
     });
   };
 
+  // Return to room from game
+  const returnToRoom = () => {
+    setGameState("waiting");
+    setCurrentView("room");
+  };
+
   // Logout user
   const handleLogout = () => {
     localStorage.removeItem("wordleUsername");
     setUsername("");
     setIsLoggedIn(false);
-    setGameState("login");
+    setCurrentView("login");
+    setCurrentRoom(null);
+    setRoomMessages([]);
+    
+    // Close WebSocket
+    if (socket) {
+      socket.close();
+      setSocket(null);
+    }
   };
 
   // Render keyboard
@@ -414,11 +777,268 @@ function App() {
     );
   };
 
+  // Render room details
+  const renderRoomDetails = () => {
+    if (!currentRoom) return null;
+    
+    const isHost = currentRoom.host === username;
+    
+    return (
+      <div className="room-container">
+        <div className="room-header">
+          <h2>{currentRoom.name}</h2>
+          <p className="room-description">{currentRoom.description}</p>
+          <div className="room-meta">
+            <span className="room-privacy">
+              {currentRoom.isPrivate ? "Private Room 🔒" : "Public Room 🌐"}
+            </span>
+            <span className="room-host">
+              Host: {currentRoom.host}
+            </span>
+          </div>
+        </div>
+        
+        <div className="room-content">
+          <div className="room-sidebar">
+            <div className="section-header">
+              <h3>Members ({currentRoom.members?.length || 0})</h3>
+            </div>
+            <div className="members-list">
+              {currentRoom.members?.map(member => (
+                <div key={member} className="member-item">
+                  <span className={`member-name ${member === currentRoom.host ? 'host' : ''}`}>
+                    {member} {member === currentRoom.host && "👑"}
+                    {member === username && " (You)"}
+                  </span>
+                  {isHost && member !== username && (
+                    <button 
+                      className="member-action" 
+                      onClick={() => manageMember(member, "remove")}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            <div className="room-actions">
+              <button className="primary-button" onClick={startGame}>
+                Play Game
+              </button>
+              <button className="secondary-button" onClick={leaveRoom}>
+                Leave Room
+              </button>
+            </div>
+          </div>
+          
+          <div className="room-main">
+            <div className="chat-container">
+              <div className="section-header">
+                <h3>Room Chat</h3>
+              </div>
+              <div className="messages-container">
+                {roomMessages.map((msg, index) => (
+                  <div 
+                    key={index} 
+                    className={`message ${msg.sender === username ? 'own-message' : ''} ${msg.type === 'system' ? 'system-message' : ''}`}
+                  >
+                    {msg.type !== 'system' && <span className="message-sender">{msg.sender}</span>}
+                    <span className="message-content">{msg.content}</span>
+                    <span className="message-time">
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+                <div ref={messagesEndRef} />
+              </div>
+              <div className="chat-input-container">
+                <input
+                  type="text"
+                  className="chat-input"
+                  placeholder="Type a message..."
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                  ref={chatInputRef}
+                />
+                <button className="chat-send-button" onClick={sendMessage}>
+                  Send
+                </button>
+              </div>
+            </div>
+            
+            {isHost && (
+              <div className="word-management">
+                <div className="section-header">
+                  <h3>Word Management</h3>
+                </div>
+                <div className="word-input-container">
+                  <input
+                    type="text"
+                    className="word-input"
+                    placeholder="Add a new word..."
+                    value={newWordInput}
+                    onChange={(e) => setNewWordInput(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && addWord()}
+                  />
+                  <button className="word-add-button" onClick={addWord}>
+                    Add Word
+                  </button>
+                </div>
+                <div className="word-list">
+                  <h4>Current Words ({currentRoom.words?.length || 0})</h4>
+                  <div className="words-grid">
+                    {currentRoom.words?.map(wordObj => (
+                      <div key={wordObj.word} className="word-item">
+                        <span className="word-text">{wordObj.word}</span>
+                        <button 
+                          className="word-remove-button" 
+                          onClick={() => removeWord(wordObj.word)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render room list
+  const renderRoomList = () => {
+    return (
+      <div className="rooms-container">
+        <div className="rooms-header">
+          <h2>Game Rooms</h2>
+          <div className="rooms-filter">
+            <button 
+              className={`filter-button ${!showPrivateRooms ? 'active' : ''}`} 
+              onClick={() => setShowPrivateRooms(false)}
+            >
+              Public Rooms
+            </button>
+            <button 
+              className={`filter-button ${showPrivateRooms ? 'active' : ''}`} 
+              onClick={() => setShowPrivateRooms(true)}
+            >
+              Private Rooms
+            </button>
+          </div>
+        </div>
+        
+        <div className="create-room">
+          <h3>Create New Room</h3>
+          <div className="create-room-form">
+            <div className="form-group">
+              <label>Room Name:</label>
+              <input
+                type="text"
+                value={newRoomData.name}
+                onChange={(e) => setNewRoomData({...newRoomData, name: e.target.value})}
+                placeholder="Enter room name"
+              />
+            </div>
+            <div className="form-group">
+              <label>Description:</label>
+              <input
+                type="text"
+                value={newRoomData.description}
+                onChange={(e) => setNewRoomData({...newRoomData, description: e.target.value})}
+                placeholder="Short description (optional)"
+              />
+            </div>
+            <div className="form-group checkbox">
+              <input
+                type="checkbox"
+                id="isPrivate"
+                checked={newRoomData.isPrivate}
+                onChange={(e) => setNewRoomData({...newRoomData, isPrivate: e.target.checked})}
+              />
+              <label htmlFor="isPrivate">Private Room</label>
+            </div>
+            {newRoomData.isPrivate && (
+              <div className="form-group">
+                <label>Password:</label>
+                <input
+                  type="password"
+                  value={newRoomData.password}
+                  onChange={(e) => setNewRoomData({...newRoomData, password: e.target.value})}
+                  placeholder="Room password"
+                />
+              </div>
+            )}
+            <button className="create-room-button" onClick={createRoom}>
+              Create Room
+            </button>
+          </div>
+        </div>
+        
+        <div className="rooms-list">
+          <h3>{showPrivateRooms ? 'Private Rooms' : 'Public Rooms'}</h3>
+          {rooms.length === 0 ? (
+            <p className="no-rooms">No rooms available. Create one!</p>
+          ) : (
+            <div className="room-cards">
+              {rooms.map(room => (
+                <div key={room.id} className="room-card">
+                  <div className="room-card-header">
+                    <h4>{room.name}</h4>
+                    <span className={`room-privacy ${room.isPrivate ? 'private' : 'public'}`}>
+                      {room.isPrivate ? '🔒 Private' : '🌐 Public'}
+                    </span>
+                  </div>
+                  {room.description && (
+                    <p className="room-card-description">{room.description}</p>
+                  )}
+                  <div className="room-card-meta">
+                    <span>Host: {room.host}</span>
+                    <span>Members: {room.memberCount}</span>
+                    <span>Words: {room.wordCount}</span>
+                  </div>
+                  {room.isPrivate ? (
+                    <div className="room-card-password">
+                      <input
+                        type="password"
+                        placeholder="Enter room password"
+                        value={room.id === roomPassword.id ? roomPassword.password : ''}
+                        onChange={(e) => setRoomPassword({id: room.id, password: e.target.value})}
+                        onKeyPress={(e) => e.key === "Enter" && joinRoom(room.id, roomPassword.password)}
+                      />
+                      <button 
+                        className="join-room-button" 
+                        onClick={() => joinRoom(room.id, roomPassword.password)}
+                      >
+                        Join
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      className="join-room-button" 
+                      onClick={() => joinRoom(room.id)}
+                    >
+                      Join Room
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Render login screen
-  if (gameState === "login") {
+  if (currentView === "login") {
     return (
       <div className="wordle-app">
-        <h1 className="title">WORDLE</h1>
+        <h1 className="title">WORDLE ROOMS</h1>
         <div className="login-container">
           <h2>Enter your username to play</h2>
           <input
@@ -429,7 +1049,7 @@ function App() {
             className="username-input"
             onKeyPress={(e) => e.key === "Enter" && handleLogin()}
           />
-          <button className="login-button" onClick={handleLogin}>
+          <button className="login-button" onClick={() => handleLogin()}>
             Play
           </button>
         </div>
@@ -441,11 +1061,25 @@ function App() {
     <div className="wordle-app">
       <header>
         <div className="header-left">
-          <button className="menu-button" onClick={() => setShowLeaderboard(!showLeaderboard)}>
-            {showLeaderboard ? "Back to Game" : "Leaderboard"}
-          </button>
+          {currentView !== "rooms" && (
+            <button 
+              className="menu-button" 
+              onClick={() => {
+                if (currentView === "game") {
+                  if (gameState === "playing" && !confirm("Are you sure you want to quit the current game?")) {
+                    return;
+                  }
+                  returnToRoom();
+                } else {
+                  setCurrentView("rooms");
+                }
+              }}
+            >
+              {currentView === "game" ? "Back to Room" : "Back to Rooms"}
+            </button>
+          )}
         </div>
-        <h1 className="title">WORDLE</h1>
+        <h1 className="title">WORDLE ROOMS</h1>
         <div className="header-right">
           <button className="menu-button" onClick={handleLogout}>
             Logout
@@ -453,61 +1087,18 @@ function App() {
         </div>
       </header>
 
-      {showLeaderboard ? (
-        <div className="leaderboard-container">
-          <h2>Leaderboard</h2>
-          {leaderboard.length > 0 ? (
-            <table className="leaderboard-table">
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>Username</th>
-                  <th>Words Solved</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leaderboard.map((player, index) => (
-                  <tr key={player.username} className={player.username === username ? "current-user" : ""}>
-                    <td>{index + 1}</td>
-                    <td>{player.username}</td>
-                    <td>{player.wordsSolved}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p>No scores yet. Be the first to play!</p>
-          )}
-          <div className="stats-container">
-            <h3>Your Stats</h3>
-            <div className="stats-grid">
-              <div className="stat-box">
-                <div className="stat-value">{gameStats.played}</div>
-                <div className="stat-label">Played</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-value">{gameStats.won}</div>
-                <div className="stat-label">Won</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-value">
-                  {gameStats.played > 0 ? Math.round((gameStats.won / gameStats.played) * 100) : 0}%
-                </div>
-                <div className="stat-label">Win %</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-value">{gameStats.currentStreak}</div>
-                <div className="stat-label">Current Streak</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-value">{gameStats.maxStreak}</div>
-                <div className="stat-label">Max Streak</div>
-              </div>
-            </div>
+      {currentView === "rooms" && renderRoomList()}
+      
+      {currentView === "room" && renderRoomDetails()}
+      
+      {currentView === "game" && (
+        <div className="game-container">
+          <div className="game-header">
+            {currentRoom && (
+              <h3>Playing in {currentRoom.name}</h3>
+            )}
           </div>
-        </div>
-      ) : (
-        <>
+          
           <div className="game-board">
             {boardData.map((row, rowIndex) => (
               <div key={`row-${rowIndex}`} className={`board-row row-${rowIndex}`}>
@@ -539,31 +1130,31 @@ function App() {
               </div>
             ))}
           </div>
-
+          
           {gameState === "won" && (
             <div className="game-message success">
               <h2>Congratulations!</h2>
               <p>You guessed the word in {currentAttempt + 1} attempts.</p>
               <div className="button-group">
                 <button onClick={shareResults}>Share Results</button>
-                <button onClick={startNewGame}>Play Again</button>
+                <button onClick={returnToRoom}>Back to Room</button>
               </div>
             </div>
           )}
-
+          
           {gameState === "lost" && (
             <div className="game-message failure">
               <h2>Game Over</h2>
               <p>The word was: {targetWord}</p>
               <div className="button-group">
                 <button onClick={shareResults}>Share Results</button>
-                <button onClick={startNewGame}>Play Again</button>
+                <button onClick={returnToRoom}>Back to Room</button>
               </div>
             </div>
           )}
-
-          {showKeyboard && gameState === "playing" && renderKeyboard()}
-
+          
+          {gameState === "playing" && renderKeyboard()}
+          
           <div className="game-info">
             <p>Guess the {targetWord.length}-letter WORD in {MAX_ATTEMPTS} tries</p>
             <p>
@@ -576,7 +1167,7 @@ function App() {
               <span className="color-box absent"></span> Letter not in word
             </p>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
