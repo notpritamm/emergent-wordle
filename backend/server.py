@@ -458,6 +458,15 @@ async def leave_room(room_id: str, username: str = Body(...)):
             {"$pull": {"members": username}}
         )
         
+        # If user is in active game, mark them as left
+        if room.get("gameState", {}).get("active", False):
+            player_states = room.get("gameState", {}).get("playerStates", {})
+            if username in player_states:
+                await db.rooms.update_one(
+                    {"id": room_id},
+                    {"$set": {f"gameState.playerStates.{username}.left": True}}
+                )
+        
         # If the user was the host, assign a new host or delete the room
         if room.get("host") == username:
             if len(room.get("members", [])) <= 1:
