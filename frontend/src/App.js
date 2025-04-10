@@ -50,6 +50,10 @@ function App() {
   const [messageInput, setMessageInput] = useState("");
   const [showPrivateRooms, setShowPrivateRooms] = useState(false);
   const [roomPassword, setRoomPassword] = useState("");
+  const [roomSortOptions, setRoomSortOptions] = useState({
+    sortBy: "createdAt",
+    sortOrder: "desc"
+  });
   const [newRoomData, setNewRoomData] = useState({
     name: "",
     description: "",
@@ -58,6 +62,10 @@ function App() {
   });
   const [newWordInput, setNewWordInput] = useState("");
   const [socket, setSocket] = useState(null);
+  const [gameStartOptions, setGameStartOptions] = useState({
+    autoSelectWordCount: 0,
+    ownerPlaying: true
+  });
   
   // Refs
   const messagesEndRef = useRef(null);
