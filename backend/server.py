@@ -764,7 +764,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
 
 # New endpoints for game management
 @app.post("/api/rooms/start-game")
-async def start_game(game_data: RoomStartGame, user: User = Body(...)):
+async def start_game(game_data: RoomStartGame = Body(...), user: User = Body(...)):
     try:
         room = await db.rooms.find_one({"id": game_data.roomId})
         
@@ -791,10 +791,18 @@ async def start_game(game_data: RoomStartGame, user: User = Body(...)):
             if game_data.autoSelectWordCount > len(words):
                 game_data.autoSelectWordCount = len(words)
             selected_word = random.choice(words)
-            target_word = selected_word.get("word", "").upper()
+            # Handle the case where the word might be a string or a dict
+            if isinstance(selected_word, dict):
+                target_word = selected_word.get("word", "").upper()
+            else:
+                target_word = str(selected_word).upper()
         else:
             # Use the first word in the list
-            target_word = words[0].get("word", "").upper()
+            first_word = words[0]
+            if isinstance(first_word, dict):
+                target_word = first_word.get("word", "").upper()
+            else:
+                target_word = str(first_word).upper()
         
         # Initialize player states
         player_states = {}
