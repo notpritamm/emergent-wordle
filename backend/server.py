@@ -636,6 +636,22 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
             {"$push": {"messages": join_message}}
         )
         
+        # Send the current game state if a game is in progress
+        room = await db.rooms.find_one({"id": room_id})
+        if room and room.get("gameState", {}).get("active", False):
+            game_state = room.get("gameState", {})
+            
+            # Check if the user is part of the game
+            if username in game_state.get("playerStates", {}):
+                # Send game state
+                game_data_message = {
+                    "type": "game_state",
+                    "active": True,
+                    "word": game_state.get("currentWord"),
+                    "timestamp": datetime.now().isoformat()
+                }
+                await websocket.send_text(json.dumps(game_data_message))
+        
         while True:
             data = await websocket.receive_text()
             message_data = json.loads(data)
