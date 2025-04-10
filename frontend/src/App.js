@@ -147,7 +147,37 @@ function App() {
     
     newSocket.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      setRoomMessages(prev => [...prev, message]);
+      
+      // Handle different message types
+      if (message.type === "game_start") {
+        // Start the game with the received word
+        setTargetWord(message.word);
+        setGameState("playing");
+        setCurrentView("game");
+      } else if (message.type === "game_state") {
+        // Resume an existing game
+        if (message.active && message.word) {
+          setTargetWord(message.word);
+          setGameState("playing");
+          setCurrentView("game");
+        }
+      } else if (message.type === "game_update") {
+        // Update other player's game board
+        if (message.player !== username) {
+          setOtherPlayersBoards(prev => ({
+            ...prev,
+            [message.player]: {
+              boardData: message.boardData,
+              currentAttempt: message.currentAttempt,
+              gameOver: message.gameOver,
+              won: message.won
+            }
+          }));
+        }
+      } else {
+        // Regular chat message
+        setRoomMessages(prev => [...prev, message]);
+      }
     };
     
     newSocket.onclose = () => {
