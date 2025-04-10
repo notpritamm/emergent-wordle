@@ -807,6 +807,30 @@ function App() {
     }, 500);
   };
 
+  // Update game state on the server
+  const updateGameState = async (gameOver = false, won = false) => {
+    if (!currentRoom || gameState !== "playing") return;
+    
+    try {
+      await fetch(`${BACKEND_URL}/api/game/update`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          roomId: currentRoom.id,
+          username: username,
+          boardData: boardData,
+          currentAttempt: currentAttempt,
+          gameOver: gameOver,
+          won: won
+        }),
+      });
+    } catch (error) {
+      console.error("Error updating game state:", error);
+    }
+  };
+
   // Check if game is won or lost
   const checkGameState = () => {
     const currentWord = boardData[currentAttempt].map(cell => cell.letter).join("");
@@ -825,6 +849,7 @@ function App() {
       };
       saveUserStats(newStats);
       updateLeaderboard(true);
+      updateGameState(true, true);
       
     } else if (currentAttempt >= MAX_ATTEMPTS - 1) {
       // Game lost (used all attempts)
@@ -838,11 +863,15 @@ function App() {
       };
       saveUserStats(newStats);
       updateLeaderboard(false);
+      updateGameState(true, false);
       
     } else {
       // Continue to next attempt
       setCurrentAttempt(currentAttempt + 1);
       setCurrentRowData(Array(targetWord.length).fill().map(() => ({ letter: "", status: "empty" })));
+      
+      // Update the game state on the server
+      updateGameState();
     }
   };
 
