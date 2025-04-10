@@ -1,38 +1,401 @@
-.App {
-  text-align: center;
+:root {
+  --color-background: #121213;
+  --color-text: #ffffff;
+  --color-empty: #3a3a3c;
+  --color-filled: #565758;
+  --color-absent: #3a3a3c;
+  --color-present: #b59f3b;
+  --color-correct: #538d4e;
+  --animation-duration: 0.5s;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+body {
+  font-family: 'Arial', sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text);
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.wordle-app {
   display: flex;
   flex-direction: column;
   align-items: center;
+  min-height: 100vh;
+  padding: 1rem;
+}
+
+/* Header styles */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+  padding: 0.5rem 0;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--color-empty);
+}
+
+.header-left, .header-right {
+  flex: 1;
+}
+
+.header-right {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.2rem;
+}
+
+/* Login screen styles */
+.login-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 400px;
+  margin-top: 3rem;
+  padding: 2rem;
+  background-color: #2c2c2e;
+  border-radius: 8px;
+}
+
+.username-input {
+  width: 100%;
+  padding: 0.8rem;
+  font-size: 1rem;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-empty);
+  border-radius: 4px;
+  color: var(--color-text);
+}
+
+.login-button {
+  width: 100%;
+  padding: 0.8rem;
+  font-size: 1rem;
+  background-color: var(--color-correct);
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.login-button:hover {
+  background-color: #629b58;
+}
+
+/* Game board styles */
+.game-board {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.board-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 2px solid var(--color-empty);
+  font-size: 2rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  perspective: 1000px;
 }
 
-.App-link {
-  color: #61dafb;
+.cell.empty {
+  border-color: var(--color-empty);
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
+.cell.filled {
+  border-color: var(--color-filled);
+}
+
+.cell.absent {
+  background-color: var(--color-absent);
+  border-color: var(--color-absent);
+}
+
+.cell.present {
+  background-color: var(--color-present);
+  border-color: var(--color-present);
+}
+
+.cell.correct {
+  background-color: var(--color-correct);
+  border-color: var(--color-correct);
+}
+
+.cell-input {
+  width: 100%;
+  height: 100%;
+  text-align: center;
+  font-size: 2rem;
+  font-weight: bold;
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  text-transform: uppercase;
+  caret-color: white;
+}
+
+.cell-input:focus {
+  outline: none;
+}
+
+/* Flip animation */
+.flipping {
+  animation: flip-animation var(--animation-duration) ease-in-out forwards;
+}
+
+@keyframes flip-animation {
+  0% {
+    transform: rotateX(0deg);
   }
-  to {
-    transform: rotate(360deg);
+  50% {
+    transform: rotateX(90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+/* Keyboard styles */
+.keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  width: 100%;
+  max-width: 500px;
+}
+
+.keyboard-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.keyboard-key {
+  min-width: 2.5rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-empty);
+  color: var(--color-text);
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0 0.5rem;
+}
+
+.special-key {
+  font-size: 0.8rem;
+  min-width: 4rem;
+}
+
+.key-absent {
+  background-color: var(--color-absent);
+}
+
+.key-present {
+  background-color: var(--color-present);
+}
+
+.key-correct {
+  background-color: var(--color-correct);
+}
+
+/* Game messages */
+.game-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  background-color: #2c2c2e;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+  text-align: center;
+}
+
+.success {
+  border-left: 4px solid var(--color-correct);
+}
+
+.failure {
+  border-left: 4px solid crimson;
+}
+
+.button-group {
+  display: flex;
+  gap: 1rem;
+}
+
+.button-group button {
+  padding: 0.7rem 1.2rem;
+  background-color: var(--color-empty);
+  color: var(--color-text);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.button-group button:hover {
+  background-color: var(--color-filled);
+}
+
+/* Leaderboard styles */
+.leaderboard-container {
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.leaderboard-table th, .leaderboard-table td {
+  padding: 0.8rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-empty);
+}
+
+.leaderboard-table th {
+  background-color: #2c2c2e;
+}
+
+.current-user {
+  background-color: rgba(83, 141, 78, 0.2);
+}
+
+/* Stats container */
+.stats-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background-color: #2c2c2e;
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 1rem;
+}
+
+.stat-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* Game info */
+.game-info {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.game-info p {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.color-box {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 2px;
+}
+
+.color-box.correct {
+  background-color: var(--color-correct);
+}
+
+.color-box.present {
+  background-color: var(--color-present);
+}
+
+.color-box.absent {
+  background-color: var(--color-absent);
+}
+
+/* Menu button */
+.menu-button {
+  padding: 0.5rem 0.8rem;
+  background-color: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-empty);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background-color 0.2s;
+}
+
+.menu-button:hover {
+  background-color: var(--color-empty);
+}
+
+/* Responsive adjustments */
+@media (max-width: 500px) {
+  .cell {
+    width: 3rem;
+    height: 3rem;
+    font-size: 1.5rem;
+  }
+  
+  .keyboard-key {
+    min-width: 2rem;
+    height: 3rem;
+    font-size: 0.8rem;
+  }
+  
+  .special-key {
+    font-size: 0.7rem;
+    min-width: 3.5rem;
   }
 }
