@@ -762,6 +762,226 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
         logger.error(f"WebSocket error: {str(e)}")
         manager.disconnect(websocket, room_id)
 
+# New endpoints for game management
+@app.post("/api/rooms/start-game")
+async def start_game(game_data: RoomStartGame, user: User = Body(...)):
+    try:
+        room = await db.rooms.find_one({"id": game_data.roomId})
+        
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
+        
+        # Only allow the host to start a game
+        if room.get("host") != user.username:
+            raise HTTPException(status_code=403, detail="Only the host can start a game")
+        
+        # Check if game is already in progress
+        if room.get("gameState", {}).get("active", False):
+            raise HTTPException(status_code=400, detail="Game already in progress")
+        
+        # Check if room has enough words
+        words = room.get("words", [])
+        if len(words) == 0:
+            raise HTTPException(status_code=400, detail="No words available in this room")
+        
+        # Auto-select words if specified
+        target_word = None
+        if game_data.autoSelectWordCount > 0:
+            # Randomly select a word from the room's word list
+            if game_data.autoSelectWordCount > len(words):
+                game_data.autoSelectWordCount = len(words)
+            selected_word = random.choice(words)
+            target_word = selected_word.get("word", "").upper()
+        else:
+            # Use the first word in the list
+            target_word = words[0].get("word", "").upper()
+        
+        # Initialize player states
+        player_states = {}
+        for member in room.get("members", []):
+            # Skip the host if they aren't playing
+            if member == user.username and not game_data.ownerPlaying:
+                continue
+                
+            player_states[member] = {
+                "completed": False,
+                "won": False,
+                "attempts": 0,
+                "boardData": []
+            }
+        
+        # Create game state
+        game_state = {
+            "active": True,
+            "currentWord": target_word,
+            "startedAt": datetime.now(),
+            "endedAt": None,
+            "playerStates": player_states,
+            "autoSelectWordCount": game_data.autoSelectWordCount,
+            "ownerPlaying": game_data.ownerPlaying
+        }
+        
+        # Save game state to room
+        await db.rooms.update_one(
+            {"id": game_data.roomId},
+            {"$set": {"gameState": game_state}}
+        )
+        
+        # Notify all members about game start
+        game_start_message = {
+            "type": "system",
+            "content": f"Game started by {user.username}! The word has {len(target_word)} letters.",
+            "sender": "system",
+            "timestamp": datetime.now().isoformat()
+        }
+        await manager.broadcast(json.dumps(game_start_message), game_data.roomId)
+        
+        # Store the game start message
+        await db.rooms.update_one(
+            {"id": game_data.roomId},
+            {"$push": {"messages": game_start_message}}
+        )
+        
+        # Send game state to all connected clients
+        game_data_message = {
+            "type": "game_start",
+            "word": target_word,
+            "timestamp": datetime.now().isoformat()
+        }
+        await manager.broadcast(json.dumps(game_data_message), game_data.roomId)
+        
+        logger.info(f"Game started in room {game_data.roomId} by {user.username}")
+        
+        return {
+            "success": True,
+            "word": target_word,
+            "playerCount": len(player_states)
+        }
+    
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error starting game: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/game/update")
+async def update_game_state(update: GameUpdate = Body(...)):
+    try:
+        room = await db.rooms.find_one({"id": update.roomId})
+        
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
+        
+        # Check if game is active
+        if not room.get("gameState", {}).get("active", False):
+            raise HTTPException(status_code=400, detail="No active game in this room")
+        
+        # Check if player is part of the game
+        player_states = room.get("gameState", {}).get("playerStates", {})
+        if update.username not in player_states:
+            raise HTTPException(status_code=403, detail="Player not in this game")
+        
+        # Update player state
+        await db.rooms.update_one(
+            {"id": update.roomId},
+            {"$set": {
+                f"gameState.playerStates.{update.username}.boardData": update.boardData,
+                f"gameState.playerStates.{update.username}.currentAttempt": update.currentAttempt,
+                f"gameState.playerStates.{update.username}.completed": update.gameOver,
+                f"gameState.playerStates.{update.username}.won": update.won,
+                f"gameState.playerStates.{update.username}.attempts": update.currentAttempt + 1 if update.gameOver else update.currentAttempt
+            }}
+        )
+        
+        # Broadcast update to other players
+        update_message = {
+            "type": "game_update",
+            "player": update.username,
+            "boardData": update.boardData,
+            "currentAttempt": update.currentAttempt,
+            "gameOver": update.gameOver,
+            "won": update.won,
+            "timestamp": datetime.now().isoformat()
+        }
+        await manager.broadcast(json.dumps(update_message), update.roomId)
+        
+        return {"success": True}
+    
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error updating game state: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/game/state/{room_id}")
+async def get_game_state(room_id: str, username: str):
+    try:
+        room = await db.rooms.find_one({"id": room_id})
+        
+        if not room:
+            raise HTTPException(status_code=404, detail="Room not found")
+        
+        # Check if game exists
+        game_state = room.get("gameState", {})
+        if not game_state:
+            return {"active": False}
+        
+        # Filter player states to exclude current word for other players
+        player_states = {}
+        for player, state in game_state.get("playerStates", {}).items():
+            player_states[player] = {
+                "completed": state.get("completed", False),
+                "won": state.get("won", False),
+                "attempts": state.get("attempts", 0),
+                "boardData": state.get("boardData", [])
+            }
+        
+        # Return game state
+        return {
+            "active": game_state.get("active", False),
+            "startedAt": game_state.get("startedAt"),
+            "endedAt": game_state.get("endedAt"),
+            "currentWord": game_state.get("currentWord") if username in game_state.get("playerStates", {}) else None,
+            "playerStates": player_states,
+            "autoSelectWordCount": game_state.get("autoSelectWordCount", 0),
+            "ownerPlaying": game_state.get("ownerPlaying", True)
+        }
+    
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error getting game state: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/rooms/test")
+async def delete_test_rooms():
+    try:
+        # Find and delete all test rooms
+        result = await db.rooms.delete_many({"isTest": True})
+        
+        return {"success": True, "deletedCount": result.deleted_count}
+    
+    except Exception as e:
+        logger.error(f"Error deleting test rooms: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Cleanup endpoint for test rooms
+@app.post("/api/cleanup")
+async def cleanup_old_test_rooms():
+    try:
+        # Find and delete test rooms older than 24 hours
+        cutoff_time = datetime.now() - timedelta(hours=24)
+        result = await db.rooms.delete_many({
+            "isTest": True,
+            "createdAt": {"$lt": cutoff_time}
+        })
+        
+        return {"success": True, "deletedCount": result.deleted_count}
+    
+    except Exception as e:
+        logger.error(f"Error cleaning up test rooms: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
