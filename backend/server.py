@@ -137,6 +137,8 @@ class Room(BaseModel):
     password: Optional[str] = None
     description: Optional[str] = None
     createdAt: datetime = Field(default_factory=datetime.now)
+    gameState: Optional[Dict] = None
+    isTest: bool = False  # Flag for test rooms
 
 # WebSocket Connection Manager
 class ConnectionManager:
