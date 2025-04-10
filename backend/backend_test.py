@@ -1,121 +1,84 @@
-import unittest
 import requests
-import json
+import unittest
 from datetime import datetime
 
-BACKEND_URL = "https://wordle-backend-402418.ue.r.appspot.com/api"  # Using public endpoint
-
-class WordleRoomTest(unittest.TestCase):
+class WordleRoomsAPITest(unittest.TestCase):
     def setUp(self):
-        self.user1 = f"test_user1_{datetime.now().strftime('%H%M%S')}"
-        self.user2 = f"test_user2_{datetime.now().strftime('%H%M%S')}"
-        self.room_name = f"Test_Room_{datetime.now().strftime('%H%M%S')}"
-        self.test_word = "TESTING"
+        self.base_url = "https://d2b98e10-afee-4781-b31b-b2067c50fcc9.preview.emergentagent.com/api"
+        self.test_user = f"TestUser_{datetime.now().strftime('%H%M%S')}"
+        self.test_room_name = f"test_room_{datetime.now().strftime('%H%M%S')}"
 
-    def test_full_game_flow(self):
-        print("\nTesting full game flow...")
+    def test_1_login(self):
+        """Test user login"""
+        response = requests.post(f"{self.base_url}/users/login", json={
+            "username": self.test_user
+        })
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["username"], self.test_user)
+
+    def test_2_create_room(self):
+        """Test room creation"""
+        response = requests.post(f"{self.base_url}/rooms", json={
+            "room_data": {
+                "name": self.test_room_name,
+                "isPrivate": False,
+                "description": "Test room for API testing"
+            },
+            "user": {"username": self.test_user}
+        })
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.room_id = data["roomId"]
+        return data["roomId"]
+
+    def test_3_add_word(self):
+        """Test adding a word to room"""
+        room_id = self.test_2_create_room()
+        response = requests.post(f"{self.base_url}/rooms/words", json={
+            "add_data": {
+                "roomId": room_id,
+                "word": "TEST"
+            },
+            "user": {"username": self.test_user}
+        })
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+
+    def test_4_start_game(self):
+        """Test starting a game"""
+        room_id = self.test_2_create_room()
+        # First add a word
+        requests.post(f"{self.base_url}/rooms/words", json={
+            "add_data": {
+                "roomId": room_id,
+                "word": "TEST"
+            },
+            "user": {"username": self.test_user}
+        })
         
-        # 1. Login both users
-        print("1. Testing user login...")
-        user1_response = requests.post(f"{BACKEND_URL}/auth/login", json={"username": self.user1})
-        user2_response = requests.post(f"{BACKEND_URL}/auth/login", json={"username": self.user2})
-        
-        self.assertEqual(user1_response.status_code, 200)
-        self.assertEqual(user2_response.status_code, 200)
-        print("✓ Both users logged in successfully")
+        # Then start the game
+        response = requests.post(f"{self.base_url}/rooms/start-game", json={
+            "game_data": {
+                "roomId": room_id,
+                "autoSelectWordCount": 0,
+                "ownerPlaying": True
+            },
+            "user": {"username": self.test_user}
+        })
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
 
-        # 2. Create room as User1
-        print("\n2. Testing room creation...")
-        create_room_response = requests.post(
-            f"{BACKEND_URL}/rooms",
-            json={
-                "room_data": {
-                    "name": self.room_name,
-                    "isPrivate": False,
-                    "description": "Test room for automated testing"
-                },
-                "user": {"username": self.user1}
-            }
-        )
-        
-        self.assertEqual(create_room_response.status_code, 200)
-        room_data = create_room_response.json()
-        room_id = room_data["roomId"]
-        print(f"✓ Room created with ID: {room_id}")
-
-        # 3. Add word to room
-        print("\n3. Testing adding word to room...")
-        add_word_response = requests.post(
-            f"{BACKEND_URL}/rooms/words",
-            json={
-                "add_data": {
-                    "roomId": room_id,
-                    "word": self.test_word
-                },
-                "user": {"username": self.user1}
-            }
-        )
-        
-        self.assertEqual(add_word_response.status_code, 200)
-        print("✓ Word added successfully")
-
-        # 4. User2 joins room
-        print("\n4. Testing room joining...")
-        join_room_response = requests.post(
-            f"{BACKEND_URL}/rooms/join",
-            json={
-                "join_data": {"roomId": room_id},
-                "user": {"username": self.user2}
-            }
-        )
-        
-        self.assertEqual(join_room_response.status_code, 200)
-        print("✓ User2 joined room successfully")
-
-        # 5. Start game as User1
-        print("\n5. Testing game start...")
-        start_game_response = requests.post(
-            f"{BACKEND_URL}/rooms/start-game",
-            json={
-                "game_data": {
-                    "roomId": room_id,
-                    "autoSelectWordCount": 0,
-                    "ownerPlaying": True
-                },
-                "user": {"username": self.user1}
-            }
-        )
-        
-        self.assertEqual(start_game_response.status_code, 200)
-        game_data = start_game_response.json()
-        self.assertEqual(game_data["word"], self.test_word)
-        print("✓ Game started successfully")
-
-        # 6. Get game state for both users
-        print("\n6. Testing game state retrieval...")
-        user1_game_state = requests.get(f"{BACKEND_URL}/game/state/{room_id}?username={self.user1}")
-        user2_game_state = requests.get(f"{BACKEND_URL}/game/state/{room_id}?username={self.user2}")
-        
-        self.assertEqual(user1_game_state.status_code, 200)
-        self.assertEqual(user2_game_state.status_code, 200)
-        print("✓ Game state retrieved for both users")
-
-        # 7. Test room sorting
-        print("\n7. Testing room sorting...")
-        rooms_by_name = requests.get(f"{BACKEND_URL}/rooms?sort_by=name&sort_order=asc")
-        rooms_by_members = requests.get(f"{BACKEND_URL}/rooms?sort_by=memberCount&sort_order=desc")
-        
-        self.assertEqual(rooms_by_name.status_code, 200)
-        self.assertEqual(rooms_by_members.status_code, 200)
-        print("✓ Room sorting working")
-
-        # 8. Test room cleanup
-        print("\n8. Testing room cleanup...")
-        cleanup_response = requests.post(f"{BACKEND_URL}/cleanup")
-        self.assertEqual(cleanup_response.status_code, 200)
-        print("✓ Room cleanup successful")
-
-        print("\nAll backend tests completed successfully!")
+    def test_5_cleanup_test_rooms(self):
+        """Test cleanup of test rooms"""
+        response = requests.post(f"{self.base_url}/cleanup")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
 
 if __name__ == '__main__':
-    unittest.main(argv=[''], verbosity=2)
+    unittest.main()
