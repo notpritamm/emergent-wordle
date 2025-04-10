@@ -430,10 +430,12 @@ function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          user: { username },
-          roomId: currentRoom.id,
-          username: memberUsername,
-          action
+          update_data: {
+            roomId: currentRoom.id,
+            username: memberUsername,
+            action
+          },
+          user: { username }
         }),
       });
       
