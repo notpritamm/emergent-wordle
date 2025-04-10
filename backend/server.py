@@ -683,9 +683,14 @@ async def get_room_leaderboard(room_id: str):
 
 # WebSocket for room chat
 @app.websocket("/api/ws/{room_id}")
-async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
+async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str = ""):
     await manager.connect(websocket, room_id)
     try:
+        if not username:
+            # Skip join message and other operations if username is empty
+            while True:
+                await websocket.receive_text()  # Just keep connection open
+                
         # Add join message to the room
         join_message = {
             "type": "system",
@@ -707,7 +712,8 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, username: str):
             game_state = room.get("gameState", {})
             
             # Check if the user is part of the game
-            if username in game_state.get("playerStates", {}):
+            player_states = game_state.get("playerStates", {})
+            if username and username in player_states:
                 # Send game state
                 game_data_message = {
                     "type": "game_state",
