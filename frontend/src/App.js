@@ -279,7 +279,13 @@ function App() {
   // Fetch room list
   const fetchRooms = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/rooms?is_public=${!showPrivateRooms}`);
+      const queryParams = new URLSearchParams({
+        is_public: !showPrivateRooms,
+        sort_by: roomSortOptions.sortBy,
+        sort_order: roomSortOptions.sortOrder
+      });
+      
+      const response = await fetch(`${BACKEND_URL}/api/rooms?${queryParams}`);
       if (response.ok) {
         const data = await response.json();
         setRooms(data);
@@ -287,6 +293,14 @@ function App() {
     } catch (error) {
       console.error("Error fetching rooms:", error);
     }
+  };
+
+  // Update room sort options
+  const updateRoomSort = (sortBy, sortOrder) => {
+    setRoomSortOptions({
+      sortBy: sortBy || roomSortOptions.sortBy,
+      sortOrder: sortOrder || roomSortOptions.sortOrder
+    });
   };
 
   // Toggle public/private rooms
